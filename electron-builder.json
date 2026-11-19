@@ -1,0 +1,35 @@
+{
+  "appId": "com.agentspec.studio",
+  "productName": "AgentSpec",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/main.cjs",
+    "package.json"
+  ],
+  "asar": true,
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      },
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "portable": {
+    "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+  },
+  "nsis": {
+    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  }
+}

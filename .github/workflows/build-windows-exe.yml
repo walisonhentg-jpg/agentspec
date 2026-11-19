@@ -1,0 +1,39 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Install Electron packager tools
+        run: npm install --no-save --no-audit --no-fund electron@33.4.11 electron-builder@25.1.8
+
+      - name: Package Windows Portable & Setup EXE
+        run: npx electron-builder --config electron-builder.json --win portable nsis --x64 --publish never
+
+      - name: Upload Windows EXE artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentSpec-Windows-EXE
+          path: release/*.exe
+          if-no-files-found: error
