@@ -514,9 +514,8 @@ function buildUserAgent(
     }
 
     const { ios, iphone, buildId } = pickCompatibleIphoneAndIos();
-    const fbShortVer = fb.ver.split('.').slice(0, 3).join('.');
     const fbrv = String(Number(fb.build) + randInt(100000, 999999, rng));
-    return `Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.osUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/${buildId} [FBAN/FBIOS;FBAV/${fbShortVer};FBBV/${fb.build};FBDV/${iphone.id};FBMD/iPhone;FBSN/iOS;FBSV/${ios.osDot};FBSS/${iphone.scale};FBID/phone;FBLC/${locale};FBOP/5;FBRV/${fbrv}]`;
+    return `Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.osUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/${buildId} [FBAN/FBIOS;FBAV/${fb.ver};FBBV/${fb.build};FBDV/${iphone.id};FBMD/iPhone;FBSN/iOS;FBSV/${ios.osDot};FBSS/${iphone.scale};FBID/phone;FBLC/${locale};FBOP/5;FBRV/${fbrv}]`;
   }
 
   if (browser === 'instagram') {
@@ -566,6 +565,241 @@ function buildUserAgent(
   return `Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.osUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/${buildId} BytedanceWebview/d8a21c6 Musical_ly/${tt.ver} (${iphone.id}; iOS ${ios.osDot}; ${localeDash}; Scale/${iphone.scale}.00)`;
 }
 
+function shuffleInPlace<T>(arr: T[], rng: () => number): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function getCompatibleAndroidDevicesAndBuilds(osVer: number): Array<{ deviceModel: AndroidDeviceModel; buildId: string }> {
+  const out: Array<{ deviceModel: AndroidDeviceModel; buildId: string }> = [];
+  for (const d of ANDROID_DEVICES) {
+    if (osVer < d.minAndroid || osVer > d.maxAndroid) continue;
+    const builds = d.androidBuilds?.[osVer] ?? OEM_ANDROID_BUILDS[d.oem]?.[osVer];
+    if (!builds || builds.length === 0) continue;
+    for (const buildId of builds) {
+      out.push({ deviceModel: d, buildId });
+    }
+  }
+  return out;
+}
+
+function buildFinitePairQueue(
+  browser: BrowserType,
+  device: DeviceType,
+  pools: {
+    chromes: ChromiumRelease[];
+    firefoxes: typeof FIREFOX_RELEASES;
+    iosList: IosRelease[];
+    androidOs: AndroidOsSpec[];
+    yts: typeof YOUTUBE_VERSIONS;
+    sbs: typeof SAMSUNG_BROWSER_PAIRS;
+    locales: string[];
+  },
+  useSevenDay: boolean,
+  rng: () => number
+): string[] | null {
+  const set = new Set<string>();
+  const addIfFresh = (ua: string) => {
+    if (useSevenDay && sevenDayStore.has('ua', ua)) return;
+    set.add(ua);
+  };
+
+  if (browser === 'chrome') {
+    if (device === 'windows') {
+      for (const ch of pools.chromes) {
+        addIfFresh(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Safari/537.36`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'macos') {
+      for (const ch of pools.chromes) {
+        addIfFresh(`Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Safari/537.36`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'linux') {
+      for (const ch of pools.chromes) {
+        addIfFresh(`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Safari/537.36`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'android') {
+      for (const ch of pools.chromes) {
+        addIfFresh(`Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Mobile Safari/537.36`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'iphone') {
+      const eligible = pools.chromes.filter((c) => c.iosPatches.length > 0);
+      const chPool = eligible.length > 0 ? eligible : CHROMIUM_RELEASES.filter((c) => c.iosPatches.length > 0);
+      for (const ios of pools.iosList) {
+        for (const ch of chPool) {
+          for (const patch of ch.iosPatches) {
+            addIfFresh(`Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.safariWebOsUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${ch.major}.0.${ch.branch}.${patch} Mobile/15E148 Safari/604.1`);
+          }
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  if (browser === 'safari') {
+    if (device === 'macos') {
+      for (const ios of pools.iosList) {
+        addIfFresh(`Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${ios.safariVersion} Safari/605.1.15`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'iphone') {
+      for (const ios of pools.iosList) {
+        addIfFresh(`Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.safariWebOsUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${ios.safariVersion} Mobile/15E148 Safari/604.1`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  if (browser === 'firefox') {
+    if (device === 'windows') {
+      for (const ff of pools.firefoxes) {
+        addIfFresh(`Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${ff.version}) Gecko/20100101 Firefox/${ff.version}`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'macos') {
+      for (const ff of pools.firefoxes) {
+        addIfFresh(`Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:${ff.version}) Gecko/20100101 Firefox/${ff.version}`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'linux') {
+      for (const ff of pools.firefoxes) {
+        addIfFresh(`Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:${ff.version}) Gecko/20100101 Firefox/${ff.version}`);
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'android') {
+      for (const ff of pools.firefoxes) {
+        for (const os of pools.androidOs) {
+          addIfFresh(`Mozilla/5.0 (Android ${os.version}; Mobile; rv:${ff.version}) Gecko/${ff.version} Firefox/${ff.version}`);
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'iphone') {
+      for (const ff of pools.firefoxes) {
+        for (const ios of pools.iosList) {
+          addIfFresh(`Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.safariWebOsUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/${ff.version} Mobile/15E148 Safari/605.1.15`);
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  if (browser === 'edge') {
+    if (device === 'windows' || device === 'macos') {
+      const eligible = pools.chromes.filter((c) => c.edgeDesktopPatches.length > 0);
+      const chPool = eligible.length > 0 ? eligible : CHROMIUM_RELEASES.filter((c) => c.edgeDesktopPatches.length > 0);
+      for (const ch of chPool) {
+        for (const patch of ch.edgeDesktopPatches) {
+          if (device === 'windows') {
+            addIfFresh(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Safari/537.36 Edg/${ch.major}.0.${ch.edgeBranch}.${patch}`);
+          } else {
+            addIfFresh(`Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Safari/537.36 Edg/${ch.major}.0.${ch.edgeBranch}.${patch}`);
+          }
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'android') {
+      const eligible = pools.chromes.filter((c) => c.edgeAndroidPatches.length > 0);
+      const chPool = eligible.length > 0 ? eligible : CHROMIUM_RELEASES.filter((c) => c.edgeAndroidPatches.length > 0);
+      for (const ch of chPool) {
+        for (const patch of ch.edgeAndroidPatches) {
+          addIfFresh(`Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${ch.major}.0.0.0 Mobile Safari/537.36 EdgA/${ch.major}.0.${ch.edgeBranch}.${patch}`);
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+    if (device === 'iphone') {
+      const eligible = pools.chromes.filter((c) => c.edgeIosPatches.length > 0);
+      const chPool = eligible.length > 0 ? eligible : CHROMIUM_RELEASES.filter((c) => c.edgeIosPatches.length > 0);
+      for (const ios of pools.iosList) {
+        for (const ch of chPool) {
+          for (const patch of ch.edgeIosPatches) {
+            addIfFresh(`Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.safariWebOsUnderscore} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 EdgiOS/${ch.major}.${ch.edgeBranch}.${patch} Mobile/15E148 Safari/605.1.15`);
+          }
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  if (browser === 'samsung') {
+    for (const sb of pools.sbs) {
+      addIfFresh(`Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/${sb.sbVer} Chrome/${sb.chromeVer} Mobile Safari/537.36`);
+    }
+    return shuffleInPlace(Array.from(set), rng);
+  }
+
+  if (browser === 'android_webview') {
+    const chEligible = pools.chromes.filter((c) => c.androidPatches.length > 0);
+    const chPool = chEligible.length > 0 ? chEligible : pools.chromes;
+    let totalPatches = 0;
+    for (const ch of chPool) totalPatches += Math.max(1, ch.androidPatches.length);
+    let totalDevices = 0;
+    for (const os of pools.androidOs) {
+      totalDevices += getCompatibleAndroidDevicesAndBuilds(Number(os.version)).length;
+    }
+    if (totalDevices * totalPatches <= 20_000) {
+      for (const os of pools.androidOs) {
+        const combos = getCompatibleAndroidDevicesAndBuilds(Number(os.version));
+        for (const { deviceModel, buildId } of combos) {
+          for (const ch of chPool) {
+            const patches = ch.androidPatches.length > 0 ? ch.androidPatches : [ch.maxPatch];
+            for (const patch of patches) {
+              addIfFresh(`Mozilla/5.0 (Linux; Android ${os.version}; ${deviceModel.model} Build/${buildId}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/${ch.major}.0.${ch.branch}.${patch} Mobile Safari/537.36`);
+            }
+          }
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  if (browser === 'youtube' && device === 'iphone') {
+    let totalIosBuilds = 0;
+    for (const ios of pools.iosList) totalIosBuilds += IPHONE_MODELS.filter((m) => m.minIosMajor <= ios.major).length;
+    if (totalIosBuilds * pools.yts.length * pools.locales.length <= 20_000) {
+      for (const ios of pools.iosList) {
+        const models = IPHONE_MODELS.filter((m) => m.minIosMajor <= ios.major);
+        for (const iphone of models) {
+          for (const yt of pools.yts) {
+            for (const locale of pools.locales) {
+              addIfFresh(`com.google.ios.youtube/${yt.ver} (${iphone.id}; U; CPU iOS ${ios.osUnderscore} like Mac OS X; ${locale})`);
+            }
+          }
+        }
+      }
+      return shuffleInPlace(Array.from(set), rng);
+    }
+  }
+
+  return null;
+}
+
+interface ActivePairSlot {
+  browser: BrowserType;
+  device: DeviceType;
+  weight: number;
+  finiteQueue: string[] | null;
+  misses: number;
+}
+
 export async function generateUserAgentsAsync(
   config: GeneratorConfig,
   onProgress?: (pct: number) => void
@@ -587,6 +821,11 @@ export async function generateUserAgentsAsync(
     };
   }
 
+  const useSevenDay = config.sevenDayGuard !== false;
+  if (useSevenDay) {
+    await sevenDayStore.init();
+  }
+
   const filteredPools = filterVersionPools(config.freshness, config.versionRanges);
   const pools = {
     chromes: filteredPools.chromes,
@@ -605,125 +844,125 @@ export async function generateUserAgentsAsync(
   const rng = createFastRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
   const target = Math.min(config.count, 1_000_000);
 
+  // Build pair slots: finite pairs get an exact shuffled queue of unissued UAs;
+  // exhausted pairs are excluded immediately so zero duplicate spins occur.
+  const activePairs: ActivePairSlot[] = [];
+  for (const p of pairs) {
+    const queue = buildFinitePairQueue(p.browser, p.device, pools, useSevenDay, rng);
+    if (queue !== null && queue.length === 0) {
+      continue;
+    }
+    const effectiveWeight =
+      config.trafficMode === 'unique'
+        ? Math.max(1, Math.round(Math.sqrt(p.weight) * 4))
+        : p.weight;
+    activePairs.push({
+      browser: p.browser,
+      device: p.device,
+      weight: effectiveWeight,
+      finiteQueue: queue,
+      misses: 0,
+    });
+  }
+
   const lines: string[] = [];
   const browserArr: number[] = [];
   const deviceArr: number[] = [];
+  const seen = new Set<string>();
 
-  const CHUNK_SIZE = 20_000;
-  let poolExhausted = false;
+  const CHUNK_SIZE = 15_000;
+  const MAX_PAIR_MISSES = 180;
+  let poolExhausted = activePairs.length === 0;
 
-  const useSevenDay = config.sevenDayGuard !== false;
-  const shouldRecord = useSevenDay && !config.skipHistoryRecord;
+  while (lines.length < target && activePairs.length > 0) {
+    let chunkOps = 0;
+    while (lines.length < target && activePairs.length > 0 && chunkOps < CHUNK_SIZE) {
+      chunkOps++;
+      const slotIdx = (() => {
+        let total = 0;
+        for (let i = 0; i < activePairs.length; i++) total += activePairs[i].weight;
+        let r = rng() * total;
+        for (let i = 0; i < activePairs.length; i++) {
+          r -= activePairs[i].weight;
+          if (r <= 0) return i;
+        }
+        return activePairs.length - 1;
+      })();
 
-  if (config.trafficMode === 'unique') {
-    const seen = new Set<string>();
-    const maxAttempts = Math.min(target * 4, target + 250_000);
-    let attempts = 0;
-    let consecutiveDupes = 0;
+      const slot = activePairs[slotIdx];
 
-    while (lines.length < target && attempts < maxAttempts) {
-      const chunkEnd = Math.min(attempts + CHUNK_SIZE, maxAttempts);
-      while (lines.length < target && attempts < chunkEnd) {
-        attempts++;
-        const pair = pickWeighted(pairs, rng);
-        const ua = buildUserAgent(pair.browser, pair.device, pools, rng);
-        const alreadyIn7Days = useSevenDay && sevenDayStore.has('ua', ua);
-        if (!seen.has(ua) && !alreadyIn7Days) {
+      if (slot.finiteQueue !== null) {
+        const ua = slot.finiteQueue.pop();
+        if (slot.finiteQueue.length === 0) {
+          activePairs.splice(slotIdx, 1);
+        }
+        if (ua && !seen.has(ua) && !(useSevenDay && sevenDayStore.has('ua', ua))) {
           seen.add(ua);
           lines.push(ua);
-          browserArr.push(BROWSER_INDEX_MAP[pair.browser]);
-          deviceArr.push(DEVICE_INDEX_MAP[pair.device]);
-          consecutiveDupes = 0;
-        } else {
-          consecutiveDupes++;
-          if (consecutiveDupes > 3500) {
-            poolExhausted = true;
-            break;
-          }
+          browserArr.push(BROWSER_INDEX_MAP[slot.browser]);
+          deviceArr.push(DEVICE_INDEX_MAP[slot.device]);
+        }
+        continue;
+      }
+
+      const ua = buildUserAgent(slot.browser, slot.device, pools, rng);
+      if (!seen.has(ua) && !(useSevenDay && sevenDayStore.has('ua', ua))) {
+        seen.add(ua);
+        lines.push(ua);
+        browserArr.push(BROWSER_INDEX_MAP[slot.browser]);
+        deviceArr.push(DEVICE_INDEX_MAP[slot.device]);
+        slot.misses = 0;
+      } else {
+        slot.misses++;
+        if (slot.misses >= MAX_PAIR_MISSES) {
+          activePairs.splice(slotIdx, 1);
         }
       }
-      if (poolExhausted) break;
-      if (onProgress) {
-        onProgress(Math.min(99, Math.round((lines.length / target) * 100)));
-        await new Promise((r) => setTimeout(r, 0));
-      }
-    }
-    if (lines.length < target) {
-      poolExhausted = true;
     }
 
-    if (shouldRecord && lines.length > 0) {
-      void sevenDayStore.recordBatch(
-        lines.map((value) => ({ category: 'ua' as const, value }))
-      );
-    }
-
-    const browserCodes = new Uint8Array(browserArr);
-    const deviceCodes = new Uint8Array(deviceArr);
-    if (onProgress) onProgress(100);
-
-    return {
-      lines,
-      browserCodes,
-      deviceCodes,
-      uniqueCount: seen.size,
-      requestedCount: target,
-      durationMs: Math.round(performance.now() - start),
-      poolCapacity,
-      poolExhausted,
-    };
-  }
-
-  // Organic Weighted Traffic mode: builds a diverse deduplicated memory pool first (up to min(target, 150k))
-  // or direct weighted sampling so even 5,00,000+ rows finish instantaneously with tiny RAM footprint!
-  const uniqueSet = new Set<string>();
-  const browserCodes = new Uint8Array(target);
-  const deviceCodes = new Uint8Array(target);
-
-  for (let i = 0; i < target; i += CHUNK_SIZE) {
-    const end = Math.min(i + CHUNK_SIZE, target);
-    for (let j = i; j < end; j++) {
-      let pair = pickWeighted(pairs, rng);
-      let ua = buildUserAgent(pair.browser, pair.device, pools, rng);
-      if (useSevenDay) {
-        let guard = 0;
-        while (sevenDayStore.has('ua', ua) && guard < 6) {
-          guard++;
-          pair = pickWeighted(pairs, rng);
-          ua = buildUserAgent(pair.browser, pair.device, pools, rng);
-        }
-      }
-      lines.push(ua);
-      browserCodes[j] = BROWSER_INDEX_MAP[pair.browser];
-      deviceCodes[j] = DEVICE_INDEX_MAP[pair.device];
-      if (uniqueSet.size < 200_000) {
-        uniqueSet.add(ua);
-      }
-    }
     if (onProgress) {
-      onProgress(Math.min(99, Math.round((end / target) * 100)));
+      onProgress(Math.min(99, Math.round((lines.length / target) * 100)));
       await new Promise((r) => setTimeout(r, 0));
     }
   }
 
-  if (shouldRecord && uniqueSet.size > 0) {
+  if (lines.length < target) {
+    poolExhausted = true;
+  }
+
+  const shouldRecord = useSevenDay && !config.skipHistoryRecord;
+  if (shouldRecord && lines.length > 0) {
     void sevenDayStore.recordBatch(
-      Array.from(uniqueSet, (value) => ({ category: 'ua' as const, value }))
+      lines.map((value) => ({ category: 'ua' as const, value }))
     );
   }
 
+  const browserCodes = new Uint8Array(browserArr);
+  const deviceCodes = new Uint8Array(deviceArr);
   if (onProgress) onProgress(100);
+
   return {
     lines,
     browserCodes,
     deviceCodes,
-    uniqueCount: uniqueSet.size,
+    uniqueCount: seen.size,
     requestedCount: target,
     durationMs: Math.round(performance.now() - start),
     poolCapacity,
-    poolExhausted: false,
+    poolExhausted,
   };
 }
+
+export type DeviceVisualType =
+  | 'iphone'
+  | 'android_samsung'
+  | 'android_pixel'
+  | 'android_other'
+  | 'windows'
+  | 'mac'
+  | 'linux'
+  | 'bot'
+  | 'unknown';
 
 export interface ValidationCheck {
   id: string;
@@ -734,12 +973,46 @@ export interface ValidationCheck {
 
 export interface ValidationReport {
   isValid: boolean;
+  verdict: 'REAL' | 'SUSPICIOUS' | 'FRAUD_OR_BOT';
   score: number;
+  riskScore: number;
+  isBot: boolean;
+  botCategory: string | null;
   detectedBrowser: string;
+  detectedBrowserVersion: string;
   detectedOs: string;
   detectedEngine: string;
+  deviceType: string;
+  deviceBrand: string;
+  deviceModel: string;
+  hardwareId: string;
+  osBuild: string;
+  screenSpec: string;
+  chipsetSpec: string;
+  localeDetected: string;
+  carrierDetected: string;
+  deviceVisualType: DeviceVisualType;
   checks: ValidationCheck[];
 }
+
+const BOT_SIGNATURE_PATTERNS: Array<{ regex: RegExp; category: string }> = [
+  {
+    regex: /(HeadlessChrome|PhantomJS|Selenium|WebDriver|Playwright|Puppeteer|Cypress|Nightmare|CasperJS|Zombie\.js|HtmlUnit|Splash)/i,
+    category: 'Headless / Browser Automation',
+  },
+  {
+    regex: /(python-requests|python-urllib|aiohttp|httpx|urllib3?|curl\/|Wget\/|Go-http-client|Java\/\d|Apache-HttpClient|okhttp\/|PostmanRuntime|Insomnia\/|Scrapy|axios\/|node-fetch|undici|libwww-perl|CFNetwork\/)/i,
+    category: 'HTTP Library / CLI Scraper',
+  },
+  {
+    regex: /(GPTBot|ChatGPT-User|ClaudeBot|Anthropic|CCBot|PerplexityBot|Bytespider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|DotBot|DataForSeoBot|Amazonbot)/i,
+    category: 'AI / SEO Scraper Bot',
+  },
+  {
+    regex: /(Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|\bWhatsApp\/|\bcrawler\b|\bspider\b|\bbot\b)/i,
+    category: 'Crawler / Spoofed Bot Signature',
+  },
+];
 
 export function validateUserAgent(uaRaw: string): ValidationReport {
   const ua = uaRaw.trim();
@@ -748,120 +1021,251 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
   if (!ua) {
     return {
       isValid: false,
+      verdict: 'FRAUD_OR_BOT',
       score: 0,
+      riskScore: 100,
+      isBot: false,
+      botCategory: null,
       detectedBrowser: 'Unknown',
+      detectedBrowserVersion: '—',
       detectedOs: 'Unknown',
       detectedEngine: 'Unknown',
+      deviceType: 'Unknown',
+      deviceBrand: 'Unknown',
+      deviceModel: 'Unknown',
+      hardwareId: '—',
+      osBuild: '—',
+      screenSpec: '—',
+      chipsetSpec: '—',
+      localeDetected: '—',
+      carrierDetected: '—',
+      deviceVisualType: 'unknown',
       checks: [{ id: 'empty', label: 'Non-empty string', passed: false, detail: 'No User-Agent string provided.' }],
     };
   }
 
-  // 1. Prefix check
+  // 1. Root Product Token & Parenthesis Balance
   const isNativeYt = /^com\.google\.(android|ios)\.youtube\//.test(ua);
   const hasMozillaPrefix = ua.startsWith('Mozilla/5.0 (');
+  const openParens = (ua.match(/\(/g) ?? []).length;
+  const closeParens = (ua.match(/\)/g) ?? []).length;
+  const parensBalanced = openParens > 0 && openParens === closeParens;
+  const hasHeaderPrefix = /^user-agent\s*:/i.test(ua);
+  const prefixOk = (hasMozillaPrefix || isNativeYt) && parensBalanced && !hasHeaderPrefix;
+
   checks.push({
     id: 'prefix',
-    label: 'Root Product Token',
-    passed: hasMozillaPrefix || isNativeYt,
-    detail: hasMozillaPrefix
-      ? 'Starts with standard Mozilla/5.0 product token.'
+    label: 'Root Product Token & Syntax Structure',
+    passed: prefixOk,
+    detail: hasHeaderPrefix
+      ? 'Remove the "User-Agent:" label prefix — paste only the raw User-Agent value.'
+      : !parensBalanced
+      ? `Malformed parenthesis count (${openParens} "(" vs ${closeParens} ")").`
+      : hasMozillaPrefix
+      ? 'Starts with valid Mozilla/5.0 (...) product token with balanced brackets.'
       : isNativeYt
       ? 'Matches official Google YouTube native Cronet/iOS app prefix.'
-      : 'Invalid or non-standard root token (expected Mozilla/5.0 or official native prefix).',
+      : 'Invalid or spoofed root token (expected Mozilla/5.0 (...) or official YouTube native prefix).',
   });
 
-  // 2. Automation / Bot Keyword Leak
-  const botMatch = ua.match(/(HeadlessChrome|PhantomJS|Selenium|Playwright|Puppeteer|python-requests|curl\/|Wget|Go-http-client|bot\b|crawler|spider|scrapy)/i);
+  // 2. Deep Bot, Headless Automation & Scraper Detection
+  let botHit: string | null = null;
+  let botCategory: string | null = null;
+  for (const pat of BOT_SIGNATURE_PATTERNS) {
+    const m = ua.match(pat.regex);
+    if (m) {
+      botHit = m[0];
+      botCategory = pat.category;
+      break;
+    }
+  }
+  const hasElectronSpoof = /\bElectron\/\d/i.test(ua);
+  if (!botHit && hasElectronSpoof) {
+    botHit = 'Electron';
+    botCategory = 'Desktop Wrapper / Automation';
+  }
+  const isBot = Boolean(botHit);
   checks.push({
     id: 'automation',
-    label: 'Zero Automation / Headless Leak',
-    passed: !botMatch,
-    detail: botMatch
-      ? `Detected bot/automation signature "${botMatch[0]}".`
-      : 'No headless browser, scraper, or CLI client tokens detected.',
+    label: 'Anti-Bot, Headless & Scraper Trap',
+    passed: !isBot,
+    detail: isBot
+      ? `FRAUD / BOT DETECTED (${botCategory}): signature "${botHit}" flagged.`
+      : 'Zero headless browsers, WebDriver/Puppeteer flags, crawlers, or HTTP client libraries detected.',
   });
 
-  // 3. Windows NT Version Check
+  // 3. Cross-OS & Architecture Contradiction Check
+  const hasIphone = /\biPhone\b/.test(ua);
+  const hasIpad = /\biPad\b/.test(ua);
+  const isIosToken = hasIphone || hasIpad;
+  const hasAndroid = /\bAndroid\b/.test(ua);
+  const hasWin = /\bWindows NT\b/.test(ua);
+  const hasMac = /\bMacintosh\b/.test(ua);
+  const hasLinuxX11 = /\bX11;/.test(ua) || /\bLinux x86_64\b/.test(ua);
+  const hasMobileToken = /\bMobile\b/.test(ua);
+  const hasWow64AndWin64 = /\bWOW64\b/.test(ua) && /\bWin64\b/.test(ua);
+  const osFamilyCount =
+    (isIosToken ? 1 : 0) +
+    (hasAndroid ? 1 : 0) +
+    (hasWin ? 1 : 0) +
+    (hasMac && !isIosToken ? 1 : 0) +
+    (hasLinuxX11 ? 1 : 0);
+
+  let crossOsOk = true;
+  let crossOsDetail = 'Single coherent OS & CPU architecture family.';
+  if (osFamilyCount > 1) {
+    crossOsOk = false;
+    crossOsDetail = 'FRAUD: Conflicting multi-OS tokens detected in the same User-Agent (e.g. Android + iPhone or Windows + Linux).';
+  } else if (hasWow64AndWin64) {
+    crossOsOk = false;
+    crossOsDetail = 'FRAUD: Contradictory Windows CPU architecture ("WOW64" and "Win64" cannot coexist).';
+  } else if ((hasWin || hasMac || hasLinuxX11) && hasMobileToken && !isIosToken) {
+    crossOsOk = false;
+    crossOsDetail = 'FRAUD: Desktop OS token cannot carry a "Mobile" browser flag.';
+  } else if (hasAndroid && !hasMobileToken && !isNativeYt) {
+    crossOsOk = false;
+    crossOsDetail = 'Anomaly: Android phone User-Agent missing required "Mobile" token.';
+  }
+  checks.push({
+    id: 'cross_os',
+    label: 'Cross-OS & CPU Architecture Coherence',
+    passed: crossOsOk,
+    detail: crossOsDetail,
+  });
+
+  // 4. Windows NT & Desktop Token Check
   const winMatch = ua.match(/Windows NT (\d+\.\d+)/);
   let winOk = true;
   let winDetail = 'Not a Windows User-Agent.';
   if (winMatch) {
     const nt = winMatch[1];
-    winOk = nt === '10.0';
-    winDetail = winOk
-      ? 'Uses Windows NT 10.0 (correct frozen token for Windows 10 and Windows 11).'
-      : `Invalid Windows NT ${nt} detected (Windows 11 never reports NT 11.0 in real browsers).`;
+    const hasWinArch = /;\s*(Win64; x64|WOW64)\b/.test(ua);
+    if (nt !== '10.0') {
+      winOk = false;
+      winDetail = `FRAUD: Invalid Windows NT ${nt} (Windows 10 & 11 always freeze at Windows NT 10.0).`;
+    } else if (!hasWinArch) {
+      winOk = false;
+      winDetail = 'Suspicious Windows UA missing standard Win64; x64 (or WOW64) architecture token.';
+    } else {
+      winDetail = 'Uses Windows NT 10.0; Win64; x64 (authentic frozen token for Windows 10/11).';
+    }
   }
-  checks.push({ id: 'win_nt', label: 'Windows NT Token Integrity', passed: winOk, detail: winDetail });
+  checks.push({ id: 'win_nt', label: 'Windows NT & Architecture Lock', passed: winOk, detail: winDetail });
 
-  // 4. macOS Frozen Token Check
-  const macMatch = ua.match(/Macintosh; Intel Mac OS X (\d+[._]\d+(?:[._]\d+)?)/);
+  // 5. macOS Frozen Token Check
+  const macMatch = ua.match(/Macintosh; ([^)]+)/);
   let macOk = true;
   let macDetail = 'Not a macOS User-Agent.';
-  if (macMatch) {
-    const ver = macMatch[1];
+  if (macMatch && !isIosToken) {
+    const macPart = macMatch[1];
+    const macVerMatch = macPart.match(/Intel Mac OS X (\d+[._]\d+(?:[._]\d+)?)/);
+    const hasArmLeak = /\b(arm64|aarch64|Apple M\d)\b/i.test(macPart);
     const isFirefox = ua.includes('Firefox/');
-    macOk = isFirefox ? ver === '10.15' : ver === '10_15_7';
-    macDetail = macOk
-      ? `Matches frozen macOS platform token (${ver}).`
-      : `Non-standard macOS version "${ver}" — modern browsers freeze at 10_15_7 (or 10.15 for Firefox).`;
+    if (hasArmLeak) {
+      macOk = false;
+      macDetail = 'FRAUD: Real macOS browsers never expose arm64/Apple Silicon chip strings — frozen at Intel Mac OS X.';
+    } else if (!macVerMatch) {
+      macOk = false;
+      macDetail = `Invalid macOS platform string "${macPart}".`;
+    } else {
+      const ver = macVerMatch[1];
+      macOk = isFirefox ? ver === '10.15' : ver === '10_15_7';
+      macDetail = macOk
+        ? `Matches frozen macOS platform token (${ver}).`
+        : `FRAUD / Spoofed macOS version "${ver}" — real browsers freeze at 10_15_7 (or 10.15 for Firefox).`;
+    }
   }
-  checks.push({ id: 'macos_frozen', label: 'macOS Platform Freeze Compliance', passed: macOk, detail: macDetail });
+  checks.push({ id: 'macos_frozen', label: 'macOS Platform Freeze Lock', passed: macOk, detail: macDetail });
 
-  // 5. iOS WebKit Engine Lock
-  const isIphone = ua.includes('iPhone') || ua.includes('iPad');
+  // 6. iOS WebKit Engine & Safari Version Ceiling Lock
   let iosEngineOk = true;
   let iosEngineDetail = 'Not an iOS User-Agent.';
-  if (isIphone && !isNativeYt) {
+  const safariVerMatch = ua.match(/\bVersion\/(\d+(?:\.\d+)?)/);
+  if (isIosToken && !isNativeYt) {
     const hasWebKit605 = ua.includes('AppleWebKit/605.1.15');
-    const hasFakeBlink = ua.includes('AppleWebKit/537.36') || /\bChrome\/\d+/.test(ua);
-    iosEngineOk = hasWebKit605 && !hasFakeBlink;
-    iosEngineDetail = iosEngineOk
-      ? 'Uses AppleWebKit/605.1.15 (enforced across all iOS Safari, CriOS, FxiOS, and In-App WebViews).'
-      : 'Impossible iOS engine mismatch: iOS browsers cannot use Blink AppleWebKit/537.36 or desktop Chrome/ tokens.';
-  }
-  checks.push({ id: 'ios_webkit', label: 'iOS WebKit Engine Lock', passed: iosEngineOk, detail: iosEngineDetail });
+    const hasFakeBlink =
+      ua.includes('AppleWebKit/537.36') ||
+      /\bChrome\/\d+/.test(ua) ||
+      /\bEdgA?\//.test(ua) ||
+      /\bFirefox\//.test(ua) ||
+      /\bSamsungBrowser\//.test(ua);
+    const iosVerCheck = ua.match(/CPU (?:iPhone )?OS (\d+)[_.](\d+)/);
+    const iosMajorNum = iosVerCheck ? Number(iosVerCheck[1]) : 0;
 
-  // 6. Chrome / CriOS / Edge Branch & UA-Reduction Coherence
+    if (!hasWebKit605 || hasFakeBlink) {
+      iosEngineOk = false;
+      iosEngineDetail = 'FRAUD: Impossible iOS engine — Apple enforces AppleWebKit/605.1.15; Blink/Chrome/Firefox/Edge Android tokens cannot run on iPhone.';
+    } else if (iosMajorNum > 27 || (iosMajorNum > 0 && iosMajorNum < 12)) {
+      iosEngineOk = false;
+      iosEngineDetail = `FRAUD / Out-of-range iOS version ${iosMajorNum} (supported current ecosystem: iOS 12–27).`;
+    } else if (safariVerMatch && !ua.includes('EdgiOS/') && Number(safariVerMatch[1]) > 27.2) {
+      iosEngineOk = false;
+      iosEngineDetail = `FRAUD / Unreleased Safari Version/${safariVerMatch[1]} (latest stable is 27.2).`;
+    } else {
+      iosEngineDetail = 'Uses AppleWebKit/605.1.15 with valid iOS WebKit constraints.';
+    }
+  } else if (!isIosToken && ua.includes('Macintosh') && safariVerMatch && Number(safariVerMatch[1]) > 27.2) {
+    iosEngineOk = false;
+    iosEngineDetail = `FRAUD / Unreleased macOS Safari Version/${safariVerMatch[1]} (latest stable is 27.2).`;
+  }
+  checks.push({ id: 'ios_webkit', label: 'iOS / Safari WebKit Engine Lock', passed: iosEngineOk, detail: iosEngineDetail });
+
+  // 7. Chrome / CriOS / Edge / Samsung Branch, Ceiling & UA-Reduction Coherence
   const chromeMatch = ua.match(/Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
   const criosMatch = ua.match(/CriOS\/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
   const edgMatch = ua.match(/EdgA?\/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
   const edgiosMatch = ua.match(/EdgiOS\/(\d+)\.(\d+)\.(\d+)/);
+  const sbMatch = ua.match(/SamsungBrowser\/(\d+(?:\.\d+)?)/);
   let chromeOk = true;
-  let chromeDetail = 'No Chromium version token present.';
+  let chromeDetail = 'No Chromium/Edge/Samsung version token present.';
 
   if (chromeMatch) {
     const major = Number(chromeMatch[1]);
     const minor = Number(chromeMatch[2]);
     const branch = Number(chromeMatch[3]);
     const patch = Number(chromeMatch[4]);
-    const isDesktop = ua.includes('Windows NT') || ua.includes('Macintosh') || ua.includes('X11; Linux');
-    const isWv = ua.includes('; wv)') || ua.includes('FB_IAB') || ua.includes('FBAN') || ua.includes('Instagram') || ua.includes('BytedanceWebview');
-
+    const isDesktop = hasWin || (hasMac && !isIosToken) || hasLinuxX11;
+    const isReducedAndroid = /Linux;\s*Android 10;\s*K\)/.test(ua);
+    const isWv =
+      ua.includes('; wv)') ||
+      ua.includes('FB_IAB') ||
+      ua.includes('FBAN') ||
+      ua.includes('Instagram') ||
+      ua.includes('BytedanceWebview');
     const knownRelease = CHROMIUM_RELEASES.find((r) => r.major === major);
 
-    if (minor !== 0) {
+    if (major > 158) {
       chromeOk = false;
-      chromeDetail = `Chrome minor version is ${minor}; Chromium always uses 0.`;
-    } else if (isDesktop && major >= 110 && branch !== 0 && !ua.includes('Edg/')) {
+      chromeDetail = `FRAUD / Unreleased future Chrome/${major} (latest verified stable is Chrome 158).`;
+    } else if (major < 100 && !isNativeYt) {
       chromeOk = false;
-      chromeDetail = `Desktop Chrome ${major} must use UA-reduced 0.0.0; found non-zero branch .${branch}.`;
+      chromeDetail = `Obsolete/Suspicious Chrome/${major} build (bots commonly replay legacy Chrome < 100).`;
+    } else if (minor !== 0) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: Chrome minor version is ${minor}; Chromium always uses 0.`;
+    } else if ((isDesktop || isReducedAndroid) && major >= 110 && branch !== 0 && !ua.includes('Edg/') && !ua.includes('EdgA/') && !ua.includes('SamsungBrowser/')) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: UA-Reduced Chrome ${major} must use .0.0.0 — found spoofed branch .${branch}.${patch}.`;
+    } else if (isWv && branch === 0 && patch === 0) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: Android WebView (; wv) never uses reduced 0.0.0 — it always exposes exact Chromium branch & patch.`;
     } else if (isWv && knownRelease && branch !== knownRelease.branch) {
       chromeOk = false;
-      chromeDetail = `Chrome/${major} WebView branch mismatch: expected official .${knownRelease.branch}.x, found .${branch}.`;
+      chromeDetail = `FRAUD: Chrome/${major} WebView branch mismatch (official is .${knownRelease.branch}.x, found .${branch}).`;
     } else if (isWv && knownRelease && (patch > knownRelease.maxPatch || (major >= 153 && !knownRelease.androidPatches.includes(patch)))) {
       chromeOk = false;
-      chromeDetail = `Chrome/${major}.0.${branch}.${patch} is not a verified Chrome for Android build (official: .${knownRelease.androidPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: Chrome/${major}.0.${branch}.${patch} is not a real Chrome for Android release (official: .${knownRelease.androidPatches.join('/.')}).`;
     } else if (branch !== 0 && knownRelease && branch !== knownRelease.branch) {
       chromeOk = false;
-      chromeDetail = `Chrome/${major} uses official branch .${knownRelease.branch}, not .${branch}.`;
+      chromeDetail = `FRAUD: Chrome/${major} uses official branch .${knownRelease.branch}, not .${branch}.`;
     } else if (branch !== 0 && knownRelease && (patch > knownRelease.maxPatch || (major >= 153 && !knownRelease.androidPatches.includes(patch)))) {
       chromeOk = false;
-      chromeDetail = `Chrome/${major}.0.${branch}.${patch} is not a verified Chrome for Android build (official: .${knownRelease.androidPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: Chrome/${major}.0.${branch}.${patch} is not a verified Chrome for Android build.`;
     } else {
-      chromeDetail = branch === 0
-        ? `Valid UA-Reduced Chrome/${major}.0.0.0 token.`
-        : `Verified Chrome/${major}.0.${branch}.${patch} matches official Chrome for Android release.`;
+      chromeDetail =
+        branch === 0
+          ? `Valid UA-Reduced Chrome/${major}.0.0.0 token.`
+          : `Verified Chrome/${major}.0.${branch}.${patch} matches official Chromium milestone.`;
     }
   } else if (criosMatch) {
     const major = Number(criosMatch[1]);
@@ -870,18 +1274,21 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     const patch = Number(criosMatch[4]);
     const knownRelease = CHROMIUM_RELEASES.find((r) => r.major === major);
 
-    if (minor !== 0) {
+    if (major > 158) {
       chromeOk = false;
-      chromeDetail = `CriOS minor version is ${minor}; iOS Chrome always uses 0.`;
+      chromeDetail = `FRAUD / Unreleased CriOS/${major} (latest stable is 158).`;
+    } else if (minor !== 0) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: CriOS minor version is ${minor}; iOS Chrome always uses 0.`;
     } else if (knownRelease && branch !== knownRelease.branch) {
       chromeOk = false;
-      chromeDetail = `CriOS/${major} build mismatch: official Chromium branch is .${knownRelease.branch}, found .${branch}.`;
+      chromeDetail = `FRAUD: CriOS/${major} build mismatch (official branch .${knownRelease.branch}, found .${branch}).`;
     } else if (knownRelease && patch > knownRelease.maxPatch) {
       chromeOk = false;
-      chromeDetail = `CriOS/${major}.0.${branch}.${patch} exceeds verified published patch ceiling (.${knownRelease.maxPatch}).`;
+      chromeDetail = `FRAUD: CriOS/${major}.0.${branch}.${patch} exceeds verified patch ceiling (.${knownRelease.maxPatch}).`;
     } else if (knownRelease && knownRelease.iosPatches.length > 0 && !knownRelease.iosPatches.includes(patch)) {
       chromeOk = false;
-      chromeDetail = `CriOS/${major}.0.${branch}.${patch} is not a verified Chrome for iOS build (official iOS: .${knownRelease.iosPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: CriOS/${major}.0.${branch}.${patch} is not a verified Chrome for iOS build.`;
     } else {
       chromeDetail = knownRelease
         ? `Verified CriOS/${major}.0.${branch}.${patch} matches official Chrome for iOS release.`
@@ -896,21 +1303,24 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     const patch = Number(edgMatch[4]);
     const isAndroidEdge = ua.includes('EdgA/');
     const knownRelease = CHROMIUM_RELEASES.find((r) => r.major === major);
-    if (minor !== 0) {
+    if (major > 157) {
       chromeOk = false;
-      chromeDetail = `Edge minor version is ${minor}; Edge Desktop/Android always uses 0.`;
+      chromeDetail = `FRAUD / Unreleased Edge/${major} (latest stable is 157).`;
+    } else if (minor !== 0) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: Edge minor version is ${minor}; Edge Desktop/Android always uses 0.`;
     } else if (knownRelease && branch !== knownRelease.edgeBranch) {
       chromeOk = false;
-      chromeDetail = `Edge/${major} build mismatch: official Edge branch is .${knownRelease.edgeBranch}, found .${branch}.`;
+      chromeDetail = `FRAUD: Edge/${major} branch mismatch (official .${knownRelease.edgeBranch}, found .${branch}).`;
     } else if (knownRelease && patch > knownRelease.maxEdgePatch) {
       chromeOk = false;
-      chromeDetail = `Edge/${major}.0.${branch}.${patch} exceeds verified Edge release patch (.${knownRelease.maxEdgePatch}).`;
+      chromeDetail = `FRAUD: Edge/${major}.0.${branch}.${patch} exceeds published Edge patch ceiling (.${knownRelease.maxEdgePatch}).`;
     } else if (isAndroidEdge && knownRelease && knownRelease.edgeAndroidPatches.length > 0 && !knownRelease.edgeAndroidPatches.includes(patch)) {
       chromeOk = false;
-      chromeDetail = `EdgA/${major}.0.${branch}.${patch} is not a verified Edge Mobile build (Android: .${knownRelease.edgeAndroidPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: EdgA/${major}.0.${branch}.${patch} is not a verified Edge Android build.`;
     } else if (!isAndroidEdge && knownRelease && knownRelease.edgeDesktopPatches.length > 0 && !knownRelease.edgeDesktopPatches.includes(patch) && major >= 154) {
       chromeOk = false;
-      chromeDetail = `Edg/${major}.0.${branch}.${patch} is not a verified Edge Desktop build (Desktop: .${knownRelease.edgeDesktopPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: Edg/${major}.0.${branch}.${patch} is not a verified Edge Desktop build.`;
     } else if (knownRelease) {
       chromeDetail = `Verified Edge ${major}.0.${branch}.${patch} matches official Microsoft Edge release.`;
     }
@@ -919,60 +1329,101 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     const branch = Number(edgiosMatch[2]);
     const patch = Number(edgiosMatch[3]);
     const knownRelease = CHROMIUM_RELEASES.find((r) => r.major === major);
-    if (knownRelease && branch !== knownRelease.edgeBranch) {
+    if (major > 157) {
       chromeOk = false;
-      chromeDetail = `EdgiOS/${major} build mismatch: official Edge branch is .${knownRelease.edgeBranch}, found .${branch}.`;
+      chromeDetail = `FRAUD / Unreleased EdgiOS/${major} (latest stable is 157).`;
+    } else if (knownRelease && branch !== knownRelease.edgeBranch) {
+      chromeOk = false;
+      chromeDetail = `FRAUD: EdgiOS/${major} branch mismatch (official .${knownRelease.edgeBranch}, found .${branch}).`;
     } else if (knownRelease && patch > knownRelease.maxEdgePatch) {
       chromeOk = false;
-      chromeDetail = `EdgiOS/${major}.${branch}.${patch} exceeds verified Edge release patch (.${knownRelease.maxEdgePatch}).`;
+      chromeDetail = `FRAUD: EdgiOS/${major}.${branch}.${patch} exceeds verified Edge release patch.`;
     } else if (knownRelease && knownRelease.edgeIosPatches.length > 0 && !knownRelease.edgeIosPatches.includes(patch)) {
       chromeOk = false;
-      chromeDetail = `EdgiOS/${major}.${branch}.${patch} is not a verified Edge for iOS build (iOS: .${knownRelease.edgeIosPatches.join('/.')}).`;
+      chromeDetail = `FRAUD: EdgiOS/${major}.${branch}.${patch} is not a verified Edge for iOS build.`;
     } else if (knownRelease) {
       chromeDetail = `Verified EdgiOS/${major}.${branch}.${patch} matches official Microsoft Edge release.`;
     }
   }
-  checks.push({ id: 'chrome_branch', label: 'Chromium / Edge Official Branch', passed: chromeOk, detail: chromeDetail });
 
-  // 7. Firefox Gecko Coherence
+  if (chromeOk && sbMatch) {
+    const sbMajor = Math.floor(Number(sbMatch[1]));
+    if (sbMajor > 31) {
+      chromeOk = false;
+      chromeDetail = `FRAUD / Unreleased SamsungBrowser/${sbMatch[1]} (latest stable is 31.0).`;
+    } else if (!hasAndroid) {
+      chromeOk = false;
+      chromeDetail = 'FRAUD: SamsungBrowser only runs on Android.';
+    }
+  }
+  checks.push({ id: 'chrome_branch', label: 'Chromium / Edge / Samsung Release Lock', passed: chromeOk, detail: chromeDetail });
+
+  // 8. Firefox Gecko Coherence & Ceiling
   const ffMatch = ua.match(/Firefox\/(\d+\.\d+)/);
+  const fxIosMatch = ua.match(/FxiOS\/(\d+\.\d+)/);
   let ffOk = true;
   let ffDetail = 'Not a Firefox User-Agent.';
   if (ffMatch) {
     const ffVer = ffMatch[1];
+    const ffMajor = Math.floor(Number(ffVer));
     const rvMatch = ua.match(/rv:(\d+\.\d+)/);
-    const isAndroidFf = ua.includes('Android');
     const geckoMatch = ua.match(/Gecko\/(\S+)/);
-    if (!rvMatch || rvMatch[1] !== ffVer) {
+    if (ffMajor > 160) {
       ffOk = false;
-      ffDetail = `Firefox/${ffVer} does not match rv:${rvMatch?.[1] ?? 'missing'}.`;
-    } else if (!isAndroidFf && geckoMatch?.[1] !== '20100101') {
+      ffDetail = `FRAUD / Unreleased Firefox/${ffVer} (latest stable is 160.0).`;
+    } else if (!rvMatch || rvMatch[1] !== ffVer) {
       ffOk = false;
-      ffDetail = `Desktop Firefox must use frozen Gecko/20100101 token.`;
-    } else if (isAndroidFf && geckoMatch?.[1] !== ffVer) {
+      ffDetail = `FRAUD: Firefox/${ffVer} does not match rv:${rvMatch?.[1] ?? 'missing'}.`;
+    } else if (!hasAndroid && geckoMatch?.[1] !== '20100101') {
       ffOk = false;
-      ffDetail = `Android Firefox must pair Gecko/${ffVer} with Firefox/${ffVer}.`;
+      ffDetail = 'FRAUD: Desktop Firefox must use frozen Gecko/20100101 token.';
+    } else if (hasAndroid && geckoMatch?.[1] !== ffVer) {
+      ffOk = false;
+      ffDetail = `FRAUD: Android Firefox must pair Gecko/${ffVer} with Firefox/${ffVer}.`;
     } else {
       ffDetail = `Coherent Firefox/${ffVer} and rv:${ffVer} Gecko pairing.`;
     }
+  } else if (fxIosMatch && Math.floor(Number(fxIosMatch[1])) > 160) {
+    ffOk = false;
+    ffDetail = `FRAUD / Unreleased FxiOS/${fxIosMatch[1]} (latest stable is 160.0).`;
   }
   checks.push({ id: 'firefox_gecko', label: 'Firefox Gecko & rv Coherence', passed: ffOk, detail: ffDetail });
 
-  // 8. Android SDK / Version / Build & Device Coherence Check
-  const igAndroidMatch = ua.match(/Instagram \S+ Android \((\d+)\/(\d+)/);
+  // 9. Android OS, SDK, Build & Full Hardware Registry Cross-Check
+  const igAndroidMatch = ua.match(/Instagram (\S+) Android \((\d+)\/(\d+);\s*(\d+)dpi;\s*(\d+x\d+);\s*([^;]+);\s*([^;]+);\s*([^;]+);\s*([^;]+);/i);
   const androidBuildMatch = ua.match(/Android (\d+)(?:\.\d+)*;\s*(?:[a-z]{2}[_-][A-Z]{2};\s*)?([^;)]+?)(?:;\s*|\s+)Build\/([A-Za-z0-9._-]+)/);
   const standaloneBuild = ua.match(/\bBuild\/([A-Za-z0-9._-]+)/)?.[1];
+  const rawAndroidVer = ua.match(/\bAndroid (\d+)/)?.[1];
   let sdkOk = true;
   let sdkDetail = 'No Android SDK/Build pairing to verify.';
 
-  if (igAndroidMatch) {
-    const sdk = Number(igAndroidMatch[1]);
-    const ver = Number(igAndroidMatch[2]);
+  if (rawAndroidVer && Number(rawAndroidVer) > 17) {
+    sdkOk = false;
+    sdkDetail = `FRAUD / Unreleased Android ${rawAndroidVer} (maximum released Android version is 17).`;
+  }
+
+  if (sdkOk && igAndroidMatch) {
+    const sdk = Number(igAndroidMatch[2]);
+    const ver = Number(igAndroidMatch[3]);
+    const igDpi = Number(igAndroidMatch[4]);
+    const igRes = igAndroidMatch[5];
+    const igBrand = igAndroidMatch[6].trim();
+    const igModel = igAndroidMatch[7].trim();
+    const igBoard = igAndroidMatch[8].trim();
+    const igChipset = igAndroidMatch[9].trim();
+
     const expectedSdk: Record<number, number> = { 12: 32, 13: 33, 14: 34, 15: 35, 16: 36, 17: 37 };
-    sdkOk = expectedSdk[ver] === sdk || (ver === 12 && sdk === 31);
-    sdkDetail = sdkOk
-      ? `Android ${ver} correctly maps to API SDK ${sdk}.`
-      : `SDK mismatch: Android ${ver} cannot report SDK ${sdk}.`;
+    const matchedIgDev = ANDROID_DEVICES.find((d) => d.model === igModel);
+
+    if (expectedSdk[ver] !== sdk && !(ver === 12 && sdk === 31)) {
+      sdkOk = false;
+      sdkDetail = `FRAUD: SDK mismatch — Android ${ver} cannot report SDK ${sdk}.`;
+    } else if (matchedIgDev) {
+      if (matchedIgDev.dpi !== igDpi || matchedIgDev.res !== igRes || matchedIgDev.board !== igBoard || matchedIgDev.chipset !== igChipset || matchedIgDev.brand.toLowerCase() !== igBrand.toLowerCase()) {
+        sdkOk = false;
+        sdkDetail = `FRAUD / Spoofed Hardware Metadata: ${igModel} requires (${matchedIgDev.dpi}dpi; ${matchedIgDev.res}; ${matchedIgDev.brand}; ${matchedIgDev.board}; ${matchedIgDev.chipset}), found (${igDpi}dpi; ${igRes}; ${igBrand}; ${igBoard}; ${igChipset}).`;
+      }
+    }
   }
 
   if (sdkOk && androidBuildMatch) {
@@ -988,31 +1439,14 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     const isPixel8a = /^Pixel 8a\b/i.test(modelName);
     const isLegacyPixel = isPixelDevice && !isPixel11;
 
-    const UNVERIFIED_ANDROID17_BUILDS = new Set([
-      'CP2A.261005.008',
-      'CP1A.260805.012',
-    ]);
-
+    const UNVERIFIED_ANDROID17_BUILDS = new Set(['CP2A.261005.008', 'CP1A.260805.012']);
     const PIXEL_EXCLUSIVE_BUILDS = new Set([
-      'BP1A.250505.005',
-      'BP1A.250305.019',
-      'AP3A.241105.007',
-      'AP4A.241205.013',
-      'AP4A.250205.002',
-      'BP3A.250905.014',
-      'BP3A.251105.015',
-      'BP2A.250805.005',
-      'BP4A.260105.011',
-      'UP1A.231105.003',
-      'UQ1A.240105.004',
-      'UQ1A.240205.004',
-      'AP1A.240405.002',
-      'AP2A.240805.005',
-      'TQ1A.230205.002',
-      'TQ2A.230505.002',
+      'BP1A.250505.005', 'BP1A.250305.019', 'AP3A.241105.007', 'AP4A.241205.013',
+      'AP4A.250205.002', 'BP3A.250905.014', 'BP3A.251105.015', 'BP2A.250805.005',
+      'BP4A.260105.011', 'UP1A.231105.003', 'UQ1A.240105.004', 'UQ1A.240205.004',
+      'AP1A.240405.002', 'AP2A.240805.005', 'TQ1A.230205.002', 'TQ2A.230505.002',
       'TQ3A.230901.001',
     ]);
-
     const buildPrefixRules: Record<number, RegExp> = {
       17: /^(CP\d[A-Z]|CD1A)/i,
       16: /^(BP[2-4][A-Z]|BD3A)/i,
@@ -1023,41 +1457,41 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
 
     if (matchedDevice && (androidVer < matchedDevice.minAndroid || androidVer > matchedDevice.maxAndroid)) {
       sdkOk = false;
-      sdkDetail = `${matchedDevice.model} (${matchedDevice.marketing}) launched for Android ${matchedDevice.minAndroid}–${matchedDevice.maxAndroid}, incompatible with Android ${androidVer}.`;
+      sdkDetail = `FRAUD: ${matchedDevice.model} (${matchedDevice.marketing}) launched for Android ${matchedDevice.minAndroid}–${matchedDevice.maxAndroid}, impossible on Android ${androidVer}.`;
     } else if (UNVERIFIED_ANDROID17_BUILDS.has(buildId)) {
       sdkOk = false;
-      sdkDetail = `Unverified/invalid Android 17 Build/${buildId}. Official Pixel builds use CP4A.261105.040.D1 (Pixel 11) / .A1 (Pixel 6–10), CD1A.261005.003 / CP3A.261005.005 (Oct), or CP2A.260805.005 (Aug).`;
+      sdkDetail = `FRAUD: Unverified Android 17 Build/${buildId}.`;
     } else if (isPixel11 && (androidVer < 17 || !/^(CP4A\.261105\.040\.(D1|B2)|CD1A\.)/i.test(buildId))) {
       sdkOk = false;
-      sdkDetail = `Pixel 11 series requires Android 17 Pixel 11 builds (CP4A.261105.040.D1/.B2 or CD1A.*), not Build/${buildId} (.A1 is for Pixel 6a–10).`;
+      sdkDetail = `FRAUD: Pixel 11 requires Android 17 Pixel 11 builds (CP4A.261105.040.D1/.B2 or CD1A.*), not Build/${buildId}.`;
     } else if (isLegacyPixel && (/^(CP4A\.261105\.040\.(D1|B2)|CD1A\.)/i.test(buildId))) {
       sdkOk = false;
-      sdkDetail = `Build/${buildId} is exclusive to the Pixel 11 series, incompatible with ${modelName} (use CP4A.261105.040.A1 or CP3A/CP2A.260805.005).`;
+      sdkDetail = `FRAUD: Build/${buildId} is Pixel 11 exclusive, incompatible with ${modelName}.`;
     } else if (isPixel10 && androidVer === 16 && /^BP2A\.250605/i.test(buildId)) {
       sdkOk = false;
-      sdkDetail = `${modelName} launched in Aug 2025 on Android 16 (BD3A/BP3A/BP4A builds), incompatible with June 2025 Build/${buildId}.`;
+      sdkDetail = `FRAUD: ${modelName} launched Aug 2025 (BD3A/BP3A/BP4A), incompatible with June 2025 Build/${buildId}.`;
     } else if (isPixel9 && androidVer === 14 && !/^AD1A\./i.test(buildId)) {
       sdkOk = false;
-      sdkDetail = `${modelName} launched in Aug 2024 on Android 14 AD1A builds (e.g. AD1A.240905.004), incompatible with earlier Android 14 Build/${buildId}.`;
+      sdkDetail = `FRAUD: ${modelName} launched Aug 2024 on AD1A builds, incompatible with Build/${buildId}.`;
     } else if (isPixel8a && androidVer === 14 && !/^(UD2A|AP2A)\./i.test(buildId)) {
       sdkOk = false;
-      sdkDetail = `${modelName} launched in May 2024 on Android 14 UD2A/AP2A builds, incompatible with earlier Build/${buildId}.`;
+      sdkDetail = `FRAUD: ${modelName} launched May 2024 on UD2A/AP2A builds, incompatible with Build/${buildId}.`;
     } else if (!isPixelDevice && (PIXEL_EXCLUSIVE_BUILDS.has(buildId) || /^(C[PD][1-4]A|AD1A|UD2A|BD3A)\./i.test(buildId))) {
       sdkOk = false;
-      sdkDetail = `Pixel-exclusive AOSP Build/${buildId} is invalid/suspicious on non-Pixel hardware (${modelName}).`;
+      sdkDetail = `FRAUD: Pixel-exclusive Build/${buildId} spoofed onto non-Pixel hardware (${modelName}).`;
     } else if (isKnownAospPrefix && buildPrefixRules[androidVer] && !buildPrefixRules[androidVer].test(buildId)) {
       sdkOk = false;
-      sdkDetail = `Android ${androidVer} build mismatch: Build/${buildId} belongs to a different Android release family.`;
-    } else if (!igAndroidMatch) {
+      sdkDetail = `FRAUD: Android ${androidVer} build mismatch — Build/${buildId} belongs to a different Android version.`;
+    } else {
       sdkDetail = `Coherent Android ${androidVer} OEM device (${modelName}) and Build/${buildId}.`;
     }
   } else if (sdkOk && /Pixel 11/i.test(ua) && standaloneBuild && !/^(CP4A\.261105\.040\.(D1|B2)|CD1A\.)/i.test(standaloneBuild)) {
     sdkOk = false;
-    sdkDetail = `Pixel 11 series requires Android 17 Pixel 11 build IDs (CP4A.261105.040.D1/.B2 or CD1A.*), not Build/${standaloneBuild}.`;
+    sdkDetail = `FRAUD: Pixel 11 requires Android 17 Pixel 11 build IDs, not Build/${standaloneBuild}.`;
   }
-  checks.push({ id: 'android_sdk', label: 'Android OS, SDK & OEM Build Coherence', passed: sdkOk, detail: sdkDetail });
+  checks.push({ id: 'android_sdk', label: 'Android OS, SDK & OEM Hardware Coherence', passed: sdkOk, detail: sdkDetail });
 
-  // 9. Facebook / Instagram / iPhone Hardware Model & Official App/iOS Build Integrity
+  // 10. iPhone Hardware, FB/IG/TikTok/YouTube Cross-Check
   let iabOk = true;
   let iabDetail = 'Standard web browser User-Agent.';
   const embeddedIphoneId = ua.match(/\b(iPhone\d+,\d+)\b/)?.[1];
@@ -1067,123 +1501,289 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
   const mobileBuild = ua.match(/Mobile\/(2[234][A-Z]\d+)/)?.[1];
   const fbavMatch = ua.match(/FBAV\/(\d+)\./);
   const igVerMatch = ua.match(/Instagram (\d+)\./);
+  const ttVerMatch = ua.match(/(?:app_version\/|Musical_ly\/)(\d+(?:\.\d+)*)/);
+  const ytVerMatch = ua.match(/com\.google\.(?:android|ios)\.youtube\/(\d+\.\d+\.\d+)/);
   const UNVERIFIED_IOS_BUILDS = new Set([
-    '24A348',
-    '24A352',
-    '24B82',
-    '24B91',
-    '24C64',
-    '24C71',
-    '23D71',
-    '23D80',
-    '23E242',
-    '23E251',
-    '23C54',
-    '23C62',
-    '23B82',
-    '23A355',
-    '22G86',
-    '22E240',
-    '22D63',
+    '24A348', '24A352', '24B82', '24B91', '24C64', '24C71', '23D71', '23D80',
+    '23E242', '23E251', '23C54', '23C62', '23B82', '23A355', '22G86', '22E240', '22D63',
   ]);
   const fbbvMatch = ua.match(/FBBV\/(\d+)/);
-  const fbBuildOwner = fbbvMatch
-    ? FACEBOOK_VERSIONS.find((f) => f.build === fbbvMatch[1])
-    : undefined;
+  const fbBuildOwner = fbbvMatch ? FACEBOOK_VERSIONS.find((f) => f.build === fbbvMatch[1]) : undefined;
   const fbavFullPrefix = fbavMatch?.[1];
 
-  if (embeddedIphoneId && (!matchedIphoneModel || embeddedIphoneId.startsWith('iPhone19,'))) {
+  if (embeddedIphoneId && !matchedIphoneModel) {
     iabOk = false;
-    iabDetail = `Blocked / Fraud Apple device ID "${embeddedIphoneId}" (iPhone19,* and unrecognized IDs are rejected; valid released range is iPhone14,7–iPhone18,5).`;
+    iabDetail = `FRAUD / Unsupported Apple device ID "${embeddedIphoneId}" (valid verified range: iPhone 12 [iPhone13,1] through iPhone 18 Pro Max [iPhone19,3/19,7]).`;
   } else if (mobileBuild && UNVERIFIED_IOS_BUILDS.has(mobileBuild)) {
     iabOk = false;
-    iabDetail = `Unverified or mismatched Apple iOS build "${mobileBuild}" (rejected by official Apple release check).`;
+    iabDetail = `FRAUD: Unverified Apple iOS build "${mobileBuild}".`;
   } else if (fbavMatch && Number(fbavMatch[1]) > 588) {
     iabOk = false;
-    iabDetail = `Unreleased Facebook app version FBAV/${fbavMatch[1]}.x (latest released App Store version is 588.0.0).`;
+    iabDetail = `FRAUD / Unreleased Facebook FBAV/${fbavMatch[1]}.x (max verified: 588.0.0).`;
   } else if (fbBuildOwner && fbavFullPrefix && !fbBuildOwner.ver.startsWith(`${fbavFullPrefix}.`)) {
     iabOk = false;
-    iabDetail = `Facebook FBAV/FBBV mismatch: FBBV/${fbbvMatch?.[1]} belongs to ${fbBuildOwner.ver}, not FBAV/${fbavFullPrefix}.x.`;
+    iabDetail = `FRAUD: Facebook FBAV/FBBV mismatch (FBBV/${fbbvMatch?.[1]} belongs to ${fbBuildOwner.ver}).`;
   } else if (igVerMatch && Number(igVerMatch[1]) > 456) {
     iabOk = false;
-    iabDetail = `Unreleased Instagram app version ${igVerMatch[1]}.x (latest released App Store version is 456.0.0).`;
+    iabDetail = `FRAUD / Unreleased Instagram ${igVerMatch[1]}.x (max verified: 456.0.0).`;
+  } else if (ttVerMatch && Number(ttVerMatch[1].split('.')[0]) > 48) {
+    iabOk = false;
+    iabDetail = `FRAUD / Unreleased TikTok ${ttVerMatch[1]} (max verified: 47.9.2).`;
+  } else if (ytVerMatch && Number(ytVerMatch[1].split('.')[0]) > 22) {
+    iabOk = false;
+    iabDetail = `FRAUD / Unreleased YouTube ${ytVerMatch[1]} (max verified: 21.46.3).`;
   } else if (ua.includes('FBAN/FBIOS')) {
     const hasIphone = ua.includes('iPhone') && ua.includes('FBSN/iOS');
     const fbsvFull = ua.match(/FBSV\/(\d+(?:\.\d+)*)/)?.[1];
     const fbsvMajor = fbsvFull ? Number(fbsvFull.split('.')[0]) : undefined;
     const matchedIos = fbsvFull ? IOS_RELEASES.find((r) => r.osDot === fbsvFull) : undefined;
+    const headerIosDot = ua.match(/iPhone OS (\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.');
 
     if (!hasIphone) {
       iabOk = false;
-      iabDetail = 'FBAN/FBIOS token requires iPhone + FBSN/iOS.';
+      iabDetail = 'FRAUD: FBAN/FBIOS token requires iPhone + FBSN/iOS.';
+    } else if (fbsvFull && headerIosDot && fbsvFull !== headerIosDot) {
+      iabOk = false;
+      iabDetail = `FRAUD: iOS version mismatch between header (${headerIosDot}) and FBSV (${fbsvFull}).`;
     } else if (matchedIphoneModel && fbsvMajor && fbsvMajor < matchedIphoneModel.minIosMajor) {
       iabOk = false;
-      iabDetail = `${embeddedIphoneId} (${matchedIphoneModel.name}) did not exist on iOS ${fbsvFull}.`;
+      iabDetail = `FRAUD: ${embeddedIphoneId} (${matchedIphoneModel.name}) did not exist on iOS ${fbsvFull}.`;
     } else if (matchedIos && mobileBuild && !matchedIos.buildIds.includes(mobileBuild)) {
       iabOk = false;
-      iabDetail = `iOS ${fbsvFull} build mismatch: expected ${matchedIos.buildIds.join('/')}, found ${mobileBuild}.`;
+      iabDetail = `FRAUD: iOS ${fbsvFull} build mismatch (expected ${matchedIos.buildIds.join('/')}, found ${mobileBuild}).`;
     } else {
       iabDetail = embeddedIphoneId
-        ? `Verified Facebook iOS signature (${embeddedIphoneId} on iOS ${fbsvFull ?? '?'}, build ${mobileBuild ?? '15E148'}).`
-        : 'Valid Facebook iOS In-App Browser signature.';
+        ? `Verified Facebook iOS signature (${matchedIphoneModel?.name ?? embeddedIphoneId} on iOS ${fbsvFull ?? '?'}).`
+        : 'Valid Facebook iOS In-App signature.';
     }
   } else if (ua.includes('FBAN/FB4A') || ua.includes('FB_IAB/FB4A')) {
-    iabOk = ua.includes('Android') && ua.includes('; wv)');
-    iabDetail = iabOk
-      ? 'Valid Facebook Android WebView (wv) signature.'
-      : 'FB4A signature missing Android WebView (; wv) marker.';
+    const fbdv = ua.match(/FBDV\/([^;]+)/)?.[1]?.trim();
+    const fbsv = ua.match(/FBSV\/([^;]+)/)?.[1]?.trim();
+    const hdrModel = androidBuildMatch?.[2]?.trim();
+    const hdrOs = androidBuildMatch?.[1];
+    if (!hasAndroid || !ua.includes('; wv)')) {
+      iabOk = false;
+      iabDetail = 'FRAUD: FB4A signature missing Android WebView (; wv) marker.';
+    } else if (fbdv && hdrModel && fbdv !== hdrModel) {
+      iabOk = false;
+      iabDetail = `FRAUD: Model spoof — header reports "${hdrModel}" while FBDV reports "${fbdv}".`;
+    } else if (fbsv && hdrOs && fbsv !== hdrOs) {
+      iabOk = false;
+      iabDetail = `FRAUD: OS spoof — header reports Android ${hdrOs} while FBSV reports ${fbsv}.`;
+    } else {
+      iabDetail = 'Verified Facebook Android WebView (wv) metadata consistency.';
+    }
   } else if (ua.includes('Instagram')) {
-    iabOk = (ua.includes('Android') && ua.includes('; wv)')) || (ua.includes('iPhone') && ua.includes('Mobile/'));
-    iabDetail = iabOk ? 'Valid Instagram In-App signature.' : 'Malformed Instagram In-App signature.';
+    if (isIosToken && matchedIphoneModel) {
+      const igScaleMatch = ua.match(/scale=(\d+)\.00;\s*(\d+x\d+)/);
+      if (igScaleMatch && (Number(igScaleMatch[1]) !== matchedIphoneModel.scale || igScaleMatch[2] !== matchedIphoneModel.pxRes)) {
+        iabOk = false;
+        iabDetail = `FRAUD: ${matchedIphoneModel.name} display mismatch (expected scale=${matchedIphoneModel.scale}.00; ${matchedIphoneModel.pxRes}, found scale=${igScaleMatch[1]}.00; ${igScaleMatch[2]}).`;
+      } else {
+        iabDetail = `Verified Instagram iOS signature (${matchedIphoneModel.name}).`;
+      }
+    } else if ((hasAndroid && ua.includes('; wv)')) || (hasIphone && ua.includes('Mobile/'))) {
+      iabDetail = 'Verified Instagram In-App signature.';
+    } else {
+      iabOk = false;
+      iabDetail = 'FRAUD: Malformed Instagram In-App signature.';
+    }
   }
-  checks.push({ id: 'iab_sig', label: 'In-App & Hardware Model Integrity', passed: iabOk, detail: iabDetail });
+  checks.push({ id: 'iab_sig', label: 'Hardware Model & In-App Cross-Check', passed: iabOk, detail: iabDetail });
 
-  // 10. Structural Whitespace / Character Sanity
+  // 11. Structural HTTP Hygiene & Anomalies
   const hasControlChars = /[\r\n\t\x00-\x1f\x7f]/.test(ua) || ua.length < 30 || ua.length > 1024;
+  const hasMalformedTokens = /;;|\s{2,}/.test(ua) || (ua.includes('AppleWebKit/537.36') && !ua.includes('(KHTML, like Gecko)'));
+  const hygieneOk = !hasControlChars && !hasMalformedTokens;
   checks.push({
     id: 'sanity',
-    label: 'HTTP Header Character Hygiene',
-    passed: !hasControlChars,
+    label: 'HTTP Header Hygiene & Token Spacing',
+    passed: hygieneOk,
     detail: hasControlChars
       ? `Invalid length (${ua.length} bytes) or contains control/newline characters.`
-      : `Clean single-line header value (${ua.length} bytes).`,
+      : hasMalformedTokens
+      ? 'Suspicious formatting anomaly (double semicolons/spaces or missing KHTML token).'
+      : `Clean single-line header (${ua.length} bytes).`,
   });
 
   const passedCount = checks.filter((c) => c.passed).length;
   const isValid = passedCount === checks.length;
   const score = Math.round((passedCount / checks.length) * 100);
+  const riskScore = 100 - score;
+  const verdict: ValidationReport['verdict'] = isValid
+    ? 'REAL'
+    : isBot || score <= 80
+    ? 'FRAUD_OR_BOT'
+    : 'SUSPICIOUS';
 
+  // Extract Rich Parsed Identity Details
   let detectedBrowser = 'Unknown';
-  if (ua.includes('FBAN/FBIOS') || ua.includes('FB_IAB/FB4A') || ua.includes('FBAN/FB4A')) detectedBrowser = 'Facebook App (IAB)';
-  else if (ua.includes('Instagram')) detectedBrowser = 'Instagram App (IAB)';
-  else if (ua.includes('BytedanceWebview') || ua.includes('Musical_ly')) detectedBrowser = 'TikTok App (IAB)';
-  else if (isNativeYt) detectedBrowser = 'YouTube App';
-  else if (ua.includes('; wv)')) detectedBrowser = 'Android System WebView';
-  else if (ua.includes('SamsungBrowser/')) detectedBrowser = 'Samsung Internet';
-  else if (ua.includes('Edg/') || ua.includes('EdgA/') || ua.includes('EdgiOS/')) detectedBrowser = 'Microsoft Edge';
-  else if (ua.includes('Firefox/') || ua.includes('FxiOS/')) detectedBrowser = 'Mozilla Firefox';
-  else if (ua.includes('CriOS/') || ua.includes('Chrome/')) detectedBrowser = 'Google Chrome';
-  else if (ua.includes('Safari/')) detectedBrowser = 'Apple Safari';
+  let detectedBrowserVersion = '—';
+  if (ua.includes('FBAN/FBIOS') || ua.includes('FB_IAB/FB4A') || ua.includes('FBAN/FB4A')) {
+    detectedBrowser = hasIphone ? 'Facebook for iOS' : 'Facebook for Android';
+    detectedBrowserVersion = ua.match(/FBAV\/([0-9.]+)/)?.[1] ?? '—';
+  } else if (ua.includes('Instagram')) {
+    detectedBrowser = hasIphone ? 'Instagram for iOS' : 'Instagram for Android';
+    detectedBrowserVersion = ua.match(/Instagram\s+([0-9.]+)/)?.[1] ?? '—';
+  } else if (ua.includes('BytedanceWebview') || ua.includes('Musical_ly')) {
+    detectedBrowser = hasIphone ? 'TikTok for iOS' : 'TikTok for Android';
+    detectedBrowserVersion = ttVerMatch?.[1] ?? '—';
+  } else if (isNativeYt) {
+    detectedBrowser = hasIphone ? 'YouTube for iOS' : 'YouTube for Android';
+    detectedBrowserVersion = ytVerMatch?.[1] ?? '—';
+  } else if (ua.includes('; wv)')) {
+    detectedBrowser = 'Android System WebView';
+    detectedBrowserVersion = chromeMatch ? `${chromeMatch[1]}.0.${chromeMatch[3]}.${chromeMatch[4]}` : '—';
+  } else if (sbMatch) {
+    detectedBrowser = 'Samsung Internet';
+    detectedBrowserVersion = sbMatch[1];
+  } else if (edgMatch) {
+    detectedBrowser = ua.includes('EdgA/') ? 'Microsoft Edge (Android)' : 'Microsoft Edge';
+    detectedBrowserVersion = `${edgMatch[1]}.0.${edgMatch[3]}.${edgMatch[4]}`;
+  } else if (edgiosMatch) {
+    detectedBrowser = 'Microsoft Edge (iOS)';
+    detectedBrowserVersion = `${edgiosMatch[1]}.${edgiosMatch[2]}.${edgiosMatch[3]}`;
+  } else if (ffMatch) {
+    detectedBrowser = hasAndroid ? 'Firefox for Android' : 'Mozilla Firefox';
+    detectedBrowserVersion = ffMatch[1];
+  } else if (fxIosMatch) {
+    detectedBrowser = 'Firefox for iOS';
+    detectedBrowserVersion = fxIosMatch[1];
+  } else if (criosMatch) {
+    detectedBrowser = 'Google Chrome (iOS)';
+    detectedBrowserVersion = `${criosMatch[1]}.0.${criosMatch[3]}.${criosMatch[4]}`;
+  } else if (chromeMatch) {
+    detectedBrowser = hasAndroid ? 'Google Chrome (Android)' : 'Google Chrome';
+    detectedBrowserVersion = `${chromeMatch[1]}.0.${chromeMatch[3]}.${chromeMatch[4]}`;
+  } else if (ua.includes('Safari/') && safariVerMatch) {
+    detectedBrowser = hasIphone ? 'Mobile Safari' : 'Apple Safari';
+    detectedBrowserVersion = safariVerMatch[1];
+  } else if (isBot && botHit) {
+    detectedBrowser = botHit;
+  }
 
   let detectedOs = 'Unknown';
-  if (ua.includes('Windows NT 10.0')) detectedOs = 'Windows 10/11';
-  else if (ua.includes('iPhone')) detectedOs = 'iPhone (iOS)';
-  else if (ua.includes('Android')) detectedOs = 'Android';
-  else if (ua.includes('Macintosh')) detectedOs = 'macOS';
-  else if (ua.includes('Linux')) detectedOs = 'Linux';
+  const iosDot = ua.match(/FBSV\/([0-9.]+)/)?.[1] ?? ua.match(/iPhone OS (\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.');
+  if (winMatch) detectedOs = winMatch[1] === '10.0' ? 'Windows 10 / 11 (x64)' : `Windows NT ${winMatch[1]}`;
+  else if (hasIphone) detectedOs = iosDot ? `iOS ${iosDot}` : 'iOS (iPhone)';
+  else if (hasAndroid) detectedOs = rawAndroidVer ? `Android ${rawAndroidVer}` : 'Android';
+  else if (hasMac) detectedOs = 'macOS';
+  else if (hasLinuxX11) detectedOs = 'Linux x86_64';
 
   let detectedEngine = 'Unknown';
-  if (ua.includes('AppleWebKit/537.36')) detectedEngine = 'Blink';
-  else if (ua.includes('AppleWebKit/605.1.15')) detectedEngine = 'WebKit';
-  else if (ua.includes('Gecko/')) detectedEngine = 'Gecko';
-  else if (ua.includes('Cronet/')) detectedEngine = 'Cronet';
+  if (ua.includes('AppleWebKit/537.36')) detectedEngine = 'Blink (Chromium)';
+  else if (ua.includes('AppleWebKit/605.1.15')) detectedEngine = 'WebKit (Apple)';
+  else if (ua.includes('Gecko/')) detectedEngine = 'Gecko (Mozilla)';
+  else if (ua.includes('Cronet/')) detectedEngine = 'Cronet (Google)';
+
+  let deviceType = 'Unknown';
+  let deviceBrand = 'Unknown';
+  let deviceModel = 'Unknown';
+  let hardwareId = '—';
+  let osBuild = standaloneBuild ?? mobileBuild ?? '—';
+  let screenSpec = '—';
+  let chipsetSpec = '—';
+  let deviceVisualType: DeviceVisualType = 'unknown';
+
+  const matchedAndroidModel =
+    (androidBuildMatch?.[2] ? ANDROID_DEVICES.find((d) => d.model === androidBuildMatch[2].trim()) : undefined) ??
+    (igAndroidMatch?.[7] ? ANDROID_DEVICES.find((d) => d.model === igAndroidMatch[7].trim()) : undefined);
+
+  if (isBot) {
+    deviceType = 'Bot / Automation Client';
+    deviceBrand = botCategory ?? 'Automated Bot';
+    deviceModel = botHit ?? 'Headless Client';
+    deviceVisualType = 'bot';
+  } else if (hasIphone) {
+    deviceType = 'Smartphone';
+    deviceBrand = 'Apple';
+    deviceVisualType = 'iphone';
+    if (matchedIphoneModel) {
+      deviceModel = matchedIphoneModel.name;
+      hardwareId = matchedIphoneModel.id;
+      screenSpec = `${matchedIphoneModel.pxRes} px · @${matchedIphoneModel.scale}x`;
+    } else {
+      deviceModel = 'Apple iPhone';
+      hardwareId = embeddedIphoneId ?? 'iPhone (WebKit Standard)';
+    }
+    chipsetSpec = 'Apple Silicon (ARM64)';
+  } else if (hasAndroid) {
+    deviceType = 'Smartphone';
+    if (matchedAndroidModel) {
+      deviceBrand = matchedAndroidModel.brand.charAt(0).toUpperCase() + matchedAndroidModel.brand.slice(1);
+      deviceModel = matchedAndroidModel.marketing;
+      hardwareId = matchedAndroidModel.model;
+      screenSpec = `${matchedAndroidModel.res} px · ${matchedAndroidModel.dpi} dpi`;
+      chipsetSpec = `${matchedAndroidModel.chipset} · board: ${matchedAndroidModel.board}`;
+      deviceVisualType =
+        matchedAndroidModel.oem === 'samsung'
+          ? 'android_samsung'
+          : matchedAndroidModel.oem === 'google'
+          ? 'android_pixel'
+          : 'android_other';
+    } else if (/Linux;\s*Android 10;\s*K\)/.test(ua)) {
+      deviceBrand = ua.includes('SamsungBrowser/') ? 'Samsung (UA-Reduced)' : 'Android (UA-Reduced)';
+      deviceModel = ua.includes('SamsungBrowser/') ? 'Samsung Galaxy (Reduced K)' : 'Android Smartphone (Reduced K)';
+      hardwareId = 'K (Privacy Reduced)';
+      deviceVisualType = ua.includes('SamsungBrowser/') ? 'android_samsung' : 'android_other';
+    } else {
+      const rawModel = androidBuildMatch?.[2]?.trim() ?? 'Android Device';
+      deviceModel = rawModel;
+      hardwareId = rawModel;
+      deviceBrand = rawModel.startsWith('SM-') ? 'Samsung' : rawModel.startsWith('Pixel') ? 'Google' : 'Android OEM';
+      deviceVisualType = deviceBrand === 'Samsung' ? 'android_samsung' : deviceBrand === 'Google' ? 'android_pixel' : 'android_other';
+    }
+  } else if (hasWin) {
+    deviceType = 'Desktop / Laptop';
+    deviceBrand = 'Microsoft Windows';
+    deviceModel = 'Windows 10/11 PC';
+    hardwareId = 'Win64; x64';
+    chipsetSpec = 'x86_64';
+    deviceVisualType = 'windows';
+  } else if (hasMac) {
+    deviceType = 'Desktop / Laptop';
+    deviceBrand = 'Apple';
+    deviceModel = 'Apple Mac (macOS)';
+    hardwareId = 'Macintosh';
+    chipsetSpec = 'Intel / Apple Silicon (Frozen x86_64)';
+    deviceVisualType = 'mac';
+  } else if (hasLinuxX11) {
+    deviceType = 'Desktop / Workstation';
+    deviceBrand = 'Linux';
+    deviceModel = ua.includes('Ubuntu') ? 'Ubuntu Linux Desktop' : 'Linux Desktop';
+    hardwareId = 'X11; x86_64';
+    chipsetSpec = 'x86_64';
+    deviceVisualType = 'linux';
+  }
+
+  const localeDetected =
+    ua.match(/FBLC\/([a-z]{2}_[A-Z]{2})/)?.[1] ??
+    ua.match(/ByteLocale\/([a-z]{2}-[A-Z]{2})/)?.[1] ??
+    ua.match(/;\s*([a-z]{2}_[A-Z]{2});\s*(?:[a-z]{2}|[0-9]{6,}|Pixel|SM-)/)?.[1] ??
+    '—';
+  const carrierDetected = ua.match(/FBCR\/([^;]*)/)?.[1]?.trim() || '—';
 
   return {
     isValid,
+    verdict,
     score,
+    riskScore,
+    isBot,
+    botCategory,
     detectedBrowser,
+    detectedBrowserVersion,
     detectedOs,
     detectedEngine,
+    deviceType,
+    deviceBrand,
+    deviceModel,
+    hardwareId,
+    osBuild,
+    screenSpec,
+    chipsetSpec,
+    localeDetected,
+    carrierDetected,
+    deviceVisualType,
     checks,
   };
 }

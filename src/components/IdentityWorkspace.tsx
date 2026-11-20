@@ -41,7 +41,7 @@ interface IdentityWorkspaceProps {
   onClearSevenDay: () => void;
   onChangeCustomCount: (n: number) => void;
   onGenerate: (count: number) => void;
-  onVerifyProfile: (phone: string, gmail: string) => void;
+  onVerifyProfile: (phone: string, gmail: string, address: string) => void;
   onExportCsv: () => void;
   onExportTxt: () => void;
   onExportJson: () => void;
@@ -611,9 +611,9 @@ export function IdentityWorkspace({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => onVerifyProfile(p.phone, p.gmail)}
+                                onClick={() => onVerifyProfile(p.phone, p.gmail, p.fullAddress)}
                                 className="px-2 py-1 text-[11px] font-medium rounded border border-slate-200 text-blue-600 hover:bg-blue-50 cursor-pointer"
-                                title="Verify Phone & Gmail"
+                                title="Verify Phone, Gmail & Address"
                               >
                                 Verify
                               </button>

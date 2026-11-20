@@ -27,7 +27,7 @@ class SevenDayStore {
     gmail: 0,
   };
   private dbPromise: Promise<IDBDatabase | null> | null = null;
-  private initialized = false;
+  private initPromise: Promise<void> | null = null;
   private listeners = new Set<() => void>();
 
   private openDb(): Promise<IDBDatabase | null> {
@@ -53,40 +53,47 @@ class SevenDayStore {
     return this.dbPromise;
   }
 
-  async init(): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
-    const db = await this.openDb();
-    if (!db) return;
+  init(): Promise<void> {
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = (async () => {
+      const db = await this.openDb();
+      if (!db) return;
 
-    const now = Date.now();
-    await new Promise<void>((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.openCursor();
-        req.onsuccess = () => {
-          const cursor = req.result;
-          if (!cursor) return;
-          const record = cursor.value as { id: string; expiresAt: number };
-          if (record.expiresAt <= now) {
-            cursor.delete();
-          } else {
-            this.memorySet.add(record.id);
-            const cat = record.id.split(':')[0] as GuardCategory;
-            if (cat in this.counts) this.counts[cat]++;
-          }
-          cursor.continue();
-        };
-        tx.oncomplete = () => {
-          this.notify();
+      const now = Date.now();
+      await new Promise<void>((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.openCursor();
+          req.onsuccess = () => {
+            const cursor = req.result;
+            if (!cursor) return;
+            const record = cursor.value as { id: string; expiresAt: number };
+            if (record.expiresAt <= now) {
+              cursor.delete();
+            } else {
+              if (record.expiresAt > now + SEVEN_DAYS_MS) {
+                cursor.update({ id: record.id, expiresAt: now + SEVEN_DAYS_MS });
+              }
+              if (!this.memorySet.has(record.id)) {
+                this.memorySet.add(record.id);
+                const cat = record.id.split(':')[0] as GuardCategory;
+                if (cat in this.counts) this.counts[cat]++;
+              }
+            }
+            cursor.continue();
+          };
+          tx.oncomplete = () => {
+            this.notify();
+            resolve();
+          };
+          tx.onerror = () => resolve();
+        } catch {
           resolve();
-        };
-        tx.onerror = () => resolve();
-      } catch {
-        resolve();
-      }
-    });
+        }
+      });
+    })();
+    return this.initPromise;
   }
 
   has(category: GuardCategory, value: string): boolean {
@@ -100,7 +107,7 @@ class SevenDayStore {
   async recordBatch(entries: Array<{ category: GuardCategory; value: string }>): Promise<void> {
     if (entries.length === 0) return;
     const expiresAt = Date.now() + SEVEN_DAYS_MS;
-    const newKeys: string[] = [];
+    const newRecords: Array<{ id: string; expiresAt: number }> = [];
 
     for (let i = 0; i < entries.length; i++) {
       const { category, value } = entries[i];
@@ -108,26 +115,29 @@ class SevenDayStore {
       if (!this.memorySet.has(key)) {
         this.memorySet.add(key);
         this.counts[category]++;
-        newKeys.push(key);
+        newRecords.push({
+          id: key,
+          expiresAt,
+        });
       }
     }
 
     this.notify();
-    if (newKeys.length === 0) return;
+    if (newRecords.length === 0) return;
 
     const db = await this.openDb();
     if (!db) return;
 
     // Persist in chunks to keep IndexedDB transactions fast
-    const CHUNK = 5000;
-    for (let i = 0; i < newKeys.length; i += CHUNK) {
-      const slice = newKeys.slice(i, i + CHUNK);
+    const CHUNK = 10_000;
+    for (let i = 0; i < newRecords.length; i += CHUNK) {
+      const slice = newRecords.slice(i, i + CHUNK);
       await new Promise<void>((resolve) => {
         try {
           const tx = db.transaction(STORE_NAME, 'readwrite');
           const store = tx.objectStore(STORE_NAME);
           for (let j = 0; j < slice.length; j++) {
-            store.put({ id: slice[j], expiresAt });
+            store.put(slice[j]);
           }
           tx.oncomplete = () => resolve();
           tx.onerror = () => resolve();

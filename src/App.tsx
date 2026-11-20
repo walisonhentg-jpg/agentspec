@@ -131,6 +131,9 @@ export default function App() {
   );
   const [checkPhone, setCheckPhone] = useState<string>('+1 (212) 648-3910');
   const [checkGmail, setCheckGmail] = useState<string>('james.carter94@gmail.com');
+  const [checkAddress, setCheckAddress] = useState<string>(
+    '350 Fifth Avenue, New York, NY 10118, USA'
+  );
 
   const validPairsCount = useMemo(
     () => getValidPairs(browsers, devices).length,
@@ -258,59 +261,70 @@ export default function App() {
     [phoneCountry, phoneUsCity, phoneFormatStandalone, sevenDayGuard, isGeneratingPhones]
   );
 
-  // Initialize IndexedDB 7-day history + load initial sample batches without consuming 7-day quota
+  // Initialize IndexedDB permanent UA + 7-day identity history, then load initial preview batches
   useEffect(() => {
+    let cancelled = false;
     const unsubscribe = sevenDayStore.subscribe(() => {
       setSevenDayCounts(sevenDayStore.getCounts());
     });
-    void sevenDayStore.init().then(() => {
+
+    void (async () => {
+      await sevenDayStore.init();
+      if (cancelled) return;
       setSevenDayCounts(sevenDayStore.getCounts());
-    });
 
-    void generateUserAgentsAsync({
-      browsers: BROWSER_LIST.map((b) => b.id),
-      devices: DEVICE_LIST.map((d) => d.id),
-      freshness: 'recent',
-      trafficMode: 'unique',
-      localePreset: 'global',
-      versionRanges: DEFAULT_VERSION_RANGES,
-      sevenDayGuard: true,
-      skipHistoryRecord: true,
-      count: 1000,
-    }).then((res) => setBatch(res));
+      const [uaRes, idRes, phoneRes] = await Promise.all([
+        generateUserAgentsAsync({
+          browsers: BROWSER_LIST.map((b) => b.id),
+          devices: DEVICE_LIST.map((d) => d.id),
+          freshness: 'recent',
+          trafficMode: 'unique',
+          localePreset: 'global',
+          versionRanges: DEFAULT_VERSION_RANGES,
+          sevenDayGuard: true,
+          skipHistoryRecord: false,
+          count: 1000,
+        }),
+        generateIdentitiesAsync({
+          countries: ['US', 'GB', 'DE', 'FR'],
+          gender: 'all',
+          phoneFormat: 'international',
+          sevenDayGuard: true,
+          skipHistoryRecord: true,
+          count: 500,
+        }),
+        generatePhonesOnlyAsync({
+          country: 'US',
+          usCity: 'ALL',
+          phoneFormat: 'international',
+          sevenDayGuard: true,
+          skipHistoryRecord: true,
+          count: 200,
+        }),
+      ]);
 
-    void generateIdentitiesAsync({
-      countries: ['US', 'GB', 'DE', 'FR'],
-      gender: 'all',
-      phoneFormat: 'international',
-      sevenDayGuard: true,
-      skipHistoryRecord: true,
-      count: 500,
-    }).then((res) => setIdentityBatch(res));
+      if (cancelled) return;
+      setBatch(uaRes);
+      setIdentityBatch(idRes);
+      setPhoneBatch(phoneRes);
 
-    void generatePhonesOnlyAsync({
-      country: 'US',
-      usCity: 'ALL',
-      phoneFormat: 'international',
-      sevenDayGuard: true,
-      skipHistoryRecord: true,
-      count: 200,
-    }).then((res) => setPhoneBatch(res));
-
-    if (parseCanonicalGmailBase(baseRealGmail)) {
-      void generateGmailsOnlyAsync({
-        mode: 'real_dots',
-        baseRealGmail,
-        country: 'US',
-        gender: 'all',
-        style: 'mixed',
-        sevenDayGuard: true,
-        skipHistoryRecord: true,
-        count: 500,
-      }).then((res) => setGmailBatch(res));
-    }
+      if (parseCanonicalGmailBase(baseRealGmail)) {
+        const gmailRes = await generateGmailsOnlyAsync({
+          mode: 'real_dots',
+          baseRealGmail,
+          country: 'US',
+          gender: 'all',
+          style: 'mixed',
+          sevenDayGuard: true,
+          skipHistoryRecord: true,
+          count: 500,
+        });
+        if (!cancelled) setGmailBatch(gmailRes);
+      }
+    })();
 
     return () => {
+      cancelled = true;
       unsubscribe();
     };
   }, []);
@@ -602,9 +616,10 @@ export default function App() {
             onClearSevenDay={handleClearSevenDay}
             onChangeCustomCount={setProfileCustomCount}
             onGenerate={(n) => void runProfileGeneration(n)}
-            onVerifyProfile={(phone, gmail) => {
+            onVerifyProfile={(phone, gmail, address) => {
               setCheckPhone(phone);
               setCheckGmail(gmail);
+              setCheckAddress(address);
               setValidatorSubTab('contact');
               setActiveTab('validators');
             }}
@@ -702,8 +717,10 @@ export default function App() {
             onChangeInspectorUa={setInspectorUa}
             phoneInput={checkPhone}
             gmailInput={checkGmail}
+            addressInput={checkAddress}
             onChangePhone={setCheckPhone}
             onChangeGmail={setCheckGmail}
+            onChangeAddress={setCheckAddress}
             activeProfiles={identityBatch?.profiles ?? []}
           />
         )}

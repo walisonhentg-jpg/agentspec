@@ -263,24 +263,26 @@ export function GeneratorWorkspace({
           </div>
         )}
 
-        {/* Pool Exhausted Notice in Strict Unique Mode */}
-        {batch?.poolExhausted && trafficMode === 'unique' && (
+        {/* Pool Exhausted Notice */}
+        {batch?.poolExhausted && (
           <div className="mt-4 p-3.5 rounded-lg bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
               <span>
-                Strict Unique mode stopped at{' '}
+                Zero-repeat generation stopped at{' '}
                 <strong className="font-mono tabular-nums">{batch.lines.length.toLocaleString('en-IN')}</strong>{' '}
-                fresh strings{sevenDayGuard ? ' (excluding User-Agents issued in the last 7 days)' : ''} because real-world browsers freeze desktop/Chrome tokens. Switch to Organic Weighted, include Mobile/Social apps (FB/IG/YT/TikTok), or clear 7-day history for larger batches.
+                fresh User-Agents{sevenDayGuard ? ' (excluding User-Agents issued in the last 7 days)' : ''} because every authentic combination for your selected filters has now been issued. Enable Mobile/Social apps (FB/IG/YT/TikTok), widen OS/version filters, or clear 7-day history to reuse past combinations.
               </span>
             </div>
-            <button
-              type="button"
-              onClick={onSwitchToOrganic}
-              className="px-3 py-1.5 rounded-md bg-amber-900 text-white font-medium hover:bg-amber-800 whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              Switch to Organic Weighted
-            </button>
+            {trafficMode === 'unique' && (
+              <button
+                type="button"
+                onClick={onSwitchToOrganic}
+                className="px-3 py-1.5 rounded-md bg-amber-900 text-white font-medium hover:bg-amber-800 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                Use Market-Share Weights
+              </button>
+            )}
           </div>
         )}
       </section>

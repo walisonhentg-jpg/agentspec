@@ -32,7 +32,7 @@ export function MatrixView() {
           <div>
             <h2 className="font-semibold text-slate-900 mb-1.5">Safari (18.3–27.2)</h2>
             <p className="text-slate-600 leading-relaxed">
-              Safari 27.2 is latest Stable (27.3 Beta excluded). Released models (<code className="font-mono text-slate-900">iPhone14,7</code>–<code className="font-mono text-slate-900">iPhone18,5</code>) enforce minimum iOS versions.
+              Safari 27.2 is latest Stable (27.3 Beta excluded). Verified models (<code className="font-mono text-slate-900">iPhone13,1</code>–<code className="font-mono text-slate-900">iPhone19,7</code>: iPhone 12 through iPhone 18 Pro Max) enforce minimum iOS versions.
             </p>
           </div>
           <div>

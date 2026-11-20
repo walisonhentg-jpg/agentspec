@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Globe,
@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
+  probeEmailAvatar,
   validateGmailAddress,
   validatePhoneNumber,
 } from '../engine/contactValidator';
@@ -69,6 +70,13 @@ export function PhoneGmailCheckerView({
     phonePassed: number;
     gmailPassed: number;
     durationMs: number;
+  } | null>(null);
+
+  const [gmailAvatar, setGmailAvatar] = useState<{
+    email: string;
+    loading: boolean;
+    hasPic: boolean;
+    url: string | null;
   } | null>(null);
 
   const phoneAnalysis = useMemo(() => {
@@ -134,6 +142,25 @@ export function PhoneGmailCheckerView({
       inspected: firstFail ? firstFail.line : lines[0],
     };
   }, [gmailInput]);
+
+  useEffect(() => {
+    const emailKey = gmailAnalysis.primary.isValid
+      ? gmailAnalysis.primary.normalizedEmail
+      : gmailAnalysis.inspected.trim().toLowerCase();
+    if (!emailKey || !emailKey.includes('@')) {
+      setGmailAvatar(null);
+      return;
+    }
+    let cancelled = false;
+    setGmailAvatar({ email: emailKey, loading: true, hasPic: false, url: null });
+    void probeEmailAvatar(emailKey, 128).then((res) => {
+      if (cancelled) return;
+      setGmailAvatar({ email: emailKey, loading: false, hasPic: res.hasPic, url: res.url });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [gmailAnalysis.inspected, gmailAnalysis.primary.isValid, gmailAnalysis.primary.normalizedEmail]);
 
   const runLiveDnsMxLookup = async () => {
     const domain = gmailAnalysis.primary.domain || 'gmail.com';
@@ -366,22 +393,44 @@ export function PhoneGmailCheckerView({
             </div>
           )}
 
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              {gmailAnalysis.primary.isValid ? (
+          <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3 min-w-0">
+              {gmailAvatar?.hasPic && gmailAvatar.url ? (
+                <img
+                  src={gmailAvatar.url}
+                  alt=""
+                  className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500 shrink-0"
+                />
+              ) : gmailAnalysis.primary.isValid ? (
                 <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" aria-hidden="true" />
               ) : (
                 <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0" aria-hidden="true" />
               )}
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-bold text-slate-900">
-                  {gmailAnalysis.primary.isValid ? 'FORMAT & DOMAIN VALID (Syntax Only)' : 'INVALID GMAIL FORMAT'}
+                  {gmailAnalysis.primary.isValid ? 'VALID GMAIL FORMAT' : 'INVALID / FRAUD GMAIL'}
                 </div>
-                <div className="text-xs text-slate-500">
-                  Canonical: {gmailAnalysis.primary.normalizedEmail || '—'}
+                <div className="text-xs text-slate-500 truncate">
+                  Canonical: {gmailAnalysis.primary.normalizedEmail || '—'} ·{' '}
+                  {gmailAvatar?.loading
+                    ? 'Probing pic...'
+                    : gmailAvatar?.hasPic
+                    ? 'Public Pic Detected'
+                    : 'No Public Gravatar Pic'}
                 </div>
               </div>
             </div>
+            <span
+              className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded shrink-0 ${
+                gmailAnalysis.primary.riskLevel === 'LOW'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : gmailAnalysis.primary.riskLevel === 'MEDIUM'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-rose-100 text-rose-800'
+              }`}
+            >
+              RISK: {gmailAnalysis.primary.riskLevel}
+            </span>
           </div>
 
           {gmailAnalysis.primary.isValid && (

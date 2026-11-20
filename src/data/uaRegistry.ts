@@ -172,21 +172,42 @@ export interface IphoneModel {
 }
 
 export const IPHONE_MODELS: IphoneModel[] = [
+  // iPhone 18 Pro series (Fall 2026, iOS 27+)
+  { id: 'iPhone19,3', name: 'iPhone 18 Pro Max (US)', scale: 3, pxRes: '1320x2868', minIosMajor: 27, weight: 8 },
+  { id: 'iPhone19,7', name: 'iPhone 18 Pro Max (Global)', scale: 3, pxRes: '1320x2868', minIosMajor: 27, weight: 8 },
+  { id: 'iPhone19,2', name: 'iPhone 18 Pro', scale: 3, pxRes: '1206x2622', minIosMajor: 27, weight: 10 },
+  // iPhone 17 series (iOS 26+)
   { id: 'iPhone18,2', name: 'iPhone 17 Pro Max', scale: 3, pxRes: '1320x2868', minIosMajor: 26, weight: 12 },
   { id: 'iPhone18,1', name: 'iPhone 17 Pro', scale: 3, pxRes: '1206x2622', minIosMajor: 26, weight: 11 },
   { id: 'iPhone18,3', name: 'iPhone 17', scale: 3, pxRes: '1206x2622', minIosMajor: 26, weight: 10 },
   { id: 'iPhone18,4', name: 'iPhone Air', scale: 3, pxRes: '1260x2736', minIosMajor: 26, weight: 7 },
   { id: 'iPhone18,5', name: 'iPhone 17e', scale: 3, pxRes: '1170x2532', minIosMajor: 26, weight: 6 },
+  // iPhone 16 series (iOS 18+)
   { id: 'iPhone17,2', name: 'iPhone 16 Pro Max', scale: 3, pxRes: '1320x2868', minIosMajor: 18, weight: 11 },
   { id: 'iPhone17,1', name: 'iPhone 16 Pro', scale: 3, pxRes: '1206x2622', minIosMajor: 18, weight: 10 },
   { id: 'iPhone17,3', name: 'iPhone 16', scale: 3, pxRes: '1179x2556', minIosMajor: 18, weight: 9 },
   { id: 'iPhone17,4', name: 'iPhone 16 Plus', scale: 3, pxRes: '1290x2796', minIosMajor: 18, weight: 5 },
   { id: 'iPhone17,5', name: 'iPhone 16e', scale: 3, pxRes: '1170x2532', minIosMajor: 18, weight: 5 },
+  // iPhone 15 series (iOS 17+)
   { id: 'iPhone16,2', name: 'iPhone 15 Pro Max', scale: 3, pxRes: '1290x2796', minIosMajor: 17, weight: 6 },
   { id: 'iPhone16,1', name: 'iPhone 15 Pro', scale: 3, pxRes: '1179x2556', minIosMajor: 17, weight: 5 },
   { id: 'iPhone15,4', name: 'iPhone 15', scale: 3, pxRes: '1179x2556', minIosMajor: 17, weight: 4 },
-  { id: 'iPhone15,3', name: 'iPhone 14 Pro Max', scale: 3, pxRes: '1290x2796', minIosMajor: 16, weight: 1 },
-  { id: 'iPhone14,7', name: 'iPhone 14', scale: 3, pxRes: '1170x2532', minIosMajor: 16, weight: 1 },
+  { id: 'iPhone15,5', name: 'iPhone 15 Plus', scale: 3, pxRes: '1290x2796', minIosMajor: 17, weight: 3 },
+  // iPhone 14 series (iOS 16+)
+  { id: 'iPhone15,3', name: 'iPhone 14 Pro Max', scale: 3, pxRes: '1290x2796', minIosMajor: 16, weight: 3 },
+  { id: 'iPhone15,2', name: 'iPhone 14 Pro', scale: 3, pxRes: '1179x2556', minIosMajor: 16, weight: 3 },
+  { id: 'iPhone14,8', name: 'iPhone 14 Plus', scale: 3, pxRes: '1284x2778', minIosMajor: 16, weight: 2 },
+  { id: 'iPhone14,7', name: 'iPhone 14', scale: 3, pxRes: '1170x2532', minIosMajor: 16, weight: 3 },
+  // iPhone 13 series (iOS 15+)
+  { id: 'iPhone14,3', name: 'iPhone 13 Pro Max', scale: 3, pxRes: '1284x2778', minIosMajor: 15, weight: 2 },
+  { id: 'iPhone14,2', name: 'iPhone 13 Pro', scale: 3, pxRes: '1170x2532', minIosMajor: 15, weight: 2 },
+  { id: 'iPhone14,5', name: 'iPhone 13', scale: 3, pxRes: '1170x2532', minIosMajor: 15, weight: 3 },
+  { id: 'iPhone14,4', name: 'iPhone 13 mini', scale: 3, pxRes: '1080x2340', minIosMajor: 15, weight: 1 },
+  // iPhone 12 series (iOS 14+)
+  { id: 'iPhone13,4', name: 'iPhone 12 Pro Max', scale: 3, pxRes: '1284x2778', minIosMajor: 14, weight: 1 },
+  { id: 'iPhone13,3', name: 'iPhone 12 Pro', scale: 3, pxRes: '1170x2532', minIosMajor: 14, weight: 1 },
+  { id: 'iPhone13,2', name: 'iPhone 12', scale: 3, pxRes: '1170x2532', minIosMajor: 14, weight: 2 },
+  { id: 'iPhone13,1', name: 'iPhone 12 mini', scale: 3, pxRes: '1080x2340', minIosMajor: 14, weight: 1 },
 ];
 
 export interface AndroidOsSpec {
@@ -308,13 +329,20 @@ export const ANDROID_DEVICES: AndroidDeviceModel[] = [
   { model: 'SM-A556E', marketing: 'Galaxy A55 5G', brand: 'samsung', oem: 'samsung', board: 's5e8845', chipset: 'exynos1480', dpi: 450, res: '1080x2340', minAndroid: 14, maxAndroid: 16, samsungOnly: true, weight: 7 },
   { model: 'SM-A366B', marketing: 'Galaxy A36 5G', brand: 'samsung', oem: 'samsung', board: 'sm6475', chipset: 'qcom', dpi: 450, res: '1080x2340', minAndroid: 15, maxAndroid: 16, samsungOnly: true, weight: 6 },
   { model: 'SM-A165F', marketing: 'Galaxy A16', brand: 'samsung', oem: 'samsung', board: 'mt6789', chipset: 'mt6789', dpi: 420, res: '1080x2340', minAndroid: 14, maxAndroid: 16, samsungOnly: true, weight: 6 },
+  { model: 'SM-S918B', marketing: 'Galaxy S23 Ultra', brand: 'samsung', oem: 'samsung', board: 'kalama', chipset: 'qcom', dpi: 480, res: '1440x3088', minAndroid: 14, maxAndroid: 16, samsungOnly: true, weight: 5 },
+  { model: 'SM-A546E', marketing: 'Galaxy A54 5G', brand: 'samsung', oem: 'samsung', board: 's5e8835', chipset: 'exynos1380', dpi: 420, res: '1080x2340', minAndroid: 14, maxAndroid: 16, samsungOnly: true, weight: 5 },
+  { model: 'SM-A356B', marketing: 'Galaxy A35 5G', brand: 'samsung', oem: 'samsung', board: 's5e8845', chipset: 'exynos1380', dpi: 420, res: '1080x2340', minAndroid: 14, maxAndroid: 15, samsungOnly: true, weight: 4 },
+  { model: 'SM-G991B', marketing: 'Galaxy S21 5G', brand: 'samsung', oem: 'samsung', board: 'exynos2100', chipset: 'exynos2100', dpi: 420, res: '1080x2400', minAndroid: 14, maxAndroid: 15, samsungOnly: true, weight: 3 },
 
   // Google Pixel (model-locked official Pixel AOSP build numbers per launch timeline)
   { model: 'Pixel 11 Pro', marketing: 'Google Pixel 11 Pro', brand: 'Google', oem: 'google', board: 'grizzly', chipset: 'tensor_g6', dpi: 480, res: '1280x2856', minAndroid: 17, maxAndroid: 17, androidBuilds: { 17: ['CP4A.261105.040.D1', 'CP4A.261105.040.B2', 'CD1A.261005.003', 'CD1A.260905.001.B1', 'CD1A.260905.001.A1'] }, weight: 5 },
   { model: 'Pixel 10', marketing: 'Google Pixel 10', brand: 'Google', oem: 'google', board: 'frankel', chipset: 'tensor_g5', dpi: 420, res: '1080x2424', minAndroid: 16, maxAndroid: 17, androidBuilds: { 17: ['CP4A.261105.040.A1', 'CP3A.261005.005', 'CP3A.260905.009', 'CP2A.260805.005'], 16: ['BD3A.250721.001', 'BD3A.251005.003', 'BP3A.251105.015', 'BP4A.260105.004', 'BP4A.260105.011'] }, weight: 6 },
   { model: 'Pixel 9 Pro', marketing: 'Google Pixel 9 Pro', brand: 'Google', oem: 'google', board: 'caiman', chipset: 'tensor_g4', dpi: 480, res: '1280x2856', minAndroid: 14, maxAndroid: 17, androidBuilds: { 17: ['CP4A.261105.040.A1', 'CP3A.261005.005', 'CP3A.260905.009', 'CP2A.260805.005'], 14: ['AD1A.240530.030', 'AD1A.240530.047', 'AD1A.240905.004'] }, weight: 6 },
   { model: 'Pixel 9', marketing: 'Google Pixel 9', brand: 'Google', oem: 'google', board: 'tokay', chipset: 'tensor_g4', dpi: 420, res: '1080x2424', minAndroid: 14, maxAndroid: 17, androidBuilds: { 17: ['CP4A.261105.040.A1', 'CP3A.261005.005', 'CP3A.260905.009', 'CP2A.260805.005'], 14: ['AD1A.240530.030', 'AD1A.240530.047', 'AD1A.240905.004'] }, weight: 5 },
+  { model: 'Pixel 8 Pro', marketing: 'Google Pixel 8 Pro', brand: 'Google', oem: 'google', board: 'husky', chipset: 'tensor_g3', dpi: 480, res: '1344x2992', minAndroid: 14, maxAndroid: 16, weight: 4 },
+  { model: 'Pixel 8', marketing: 'Google Pixel 8', brand: 'Google', oem: 'google', board: 'shiba', chipset: 'tensor_g3', dpi: 420, res: '1080x2400', minAndroid: 14, maxAndroid: 16, weight: 4 },
   { model: 'Pixel 8a', marketing: 'Google Pixel 8a', brand: 'Google', oem: 'google', board: 'akita', chipset: 'tensor_g3', dpi: 420, res: '1080x2400', minAndroid: 14, maxAndroid: 16, androidBuilds: { 14: ['UD2A.240505.001', 'AP2A.240805.005'] }, weight: 4 },
+  { model: 'Pixel 7', marketing: 'Google Pixel 7', brand: 'Google', oem: 'google', board: 'panther', chipset: 'tensor_g2', dpi: 420, res: '1080x2400', minAndroid: 13, maxAndroid: 16, weight: 3 },
 
   // Xiaomi / Redmi / POCO (strictly HyperOS / MIUI AOSP base builds)
   { model: '24129PN74G', marketing: 'Xiaomi 15', brand: 'Xiaomi', oem: 'xiaomi', board: 'dada', chipset: 'qcom', dpi: 480, res: '1200x2670', minAndroid: 15, maxAndroid: 15, weight: 5 },
@@ -376,10 +404,14 @@ export const INSTAGRAM_VERSIONS: AppVersionPair[] = [
   { ver: '451.0.0.44.86', build: '906190445', tier: 'latest' },
   { ver: '443.0.0.42.94', build: '888420190', tier: 'latest' },
   { ver: '435.0.0.45.82', build: '871903412', tier: 'latest' },
+  { ver: '430.0.0.53.80', build: '383710475', tier: 'latest' },
   { ver: '426.0.0.40.89', build: '851290448', tier: 'recent' },
+  { ver: '420.0.0.55.74', build: '382609113', tier: 'recent' },
   { ver: '418.0.0.43.95', build: '832910554', tier: 'recent' },
   { ver: '410.0.0.46.88', build: '814209115', tier: 'all' },
+  { ver: '400.0.0.49.68', build: '380702873', tier: 'all' },
   { ver: '399.0.0.39.96', build: '784120981', tier: 'all' },
+  { ver: '390.0.0.43.81', build: '762140812', tier: 'all' },
   { ver: '388.0.0.37.91', build: '755201944', tier: 'all' },
 ];
 
@@ -403,17 +435,26 @@ export const TIKTOK_VERSIONS: AppVersionPair[] = [
 ];
 
 export const LOCALE_POOLS: Record<LocalePreset, string[]> = {
-  global: ['en_US', 'en_GB', 'en_IN', 'bn_BD', 'es_ES', 'pt_BR', 'fr_FR', 'de_DE', 'id_ID', 'vi_VN', 'ar_SA', 'ja_JP'],
-  us: ['en_US', 'es_US'],
-  south_asia: ['bn_BD', 'en_IN', 'en_GB', 'hi_IN', 'en_US'],
-  europe: ['en_GB', 'de_DE', 'fr_FR', 'es_ES', 'it_IT', 'nl_NL'],
-  latam: ['pt_BR', 'es_MX', 'es_AR', 'es_CO', 'es_ES'],
+  global: [
+    'en_US', 'en_GB', 'en_CA', 'en_AU', 'en_IN', 'bn_BD',
+    'es_ES', 'es_MX', 'pt_BR', 'fr_FR', 'fr_CA', 'de_DE',
+    'de_AT', 'it_IT', 'nl_NL', 'pl_PL', 'tr_TR', 'id_ID',
+    'ms_MY', 'th_TH', 'vi_VN', 'ar_SA', 'ja_JP', 'ko_KR',
+  ],
+  us: ['en_US', 'es_US', 'en_CA', 'fr_CA'],
+  south_asia: ['bn_BD', 'en_IN', 'en_GB', 'hi_IN', 'en_US', 'ta_IN', 'ur_PK'],
+  europe: ['en_GB', 'de_DE', 'de_AT', 'fr_FR', 'es_ES', 'it_IT', 'nl_NL', 'pl_PL', 'sv_SE', 'pt_PT'],
+  latam: ['pt_BR', 'es_MX', 'es_AR', 'es_CO', 'es_CL', 'es_PE', 'es_ES'],
 };
 
 export const CARRIER_POOLS: Record<LocalePreset, string[]> = {
-  global: ['T-Mobile', 'AT&T', 'Verizon', 'Vodafone', 'Grameenphone', 'Robi', 'Jio', 'Airtel', 'EE', 'Orange', 'Claro', ''],
-  us: ['T-Mobile', 'AT&T', 'Verizon', 'MetroPCS', 'Visible', ''],
-  south_asia: ['Grameenphone', 'Robi', 'Banglalink', 'Teletalk', 'Jio', 'Airtel', 'Vi India', ''],
-  europe: ['Vodafone', 'EE', 'O2 - UK', 'Telekom.de', 'Orange F', 'Movistar', ''],
-  latam: ['Claro', 'Vivo', 'TIM', 'Telcel', 'Movistar', ''],
+  global: [
+    'T-Mobile', 'AT&T', 'Verizon', 'Vodafone', 'Rogers', 'Telstra',
+    'Grameenphone', 'Robi', 'Jio', 'Airtel', 'EE', 'Orange',
+    'Claro', 'Telefonica', 'Deutsche Telekom', 'SoftBank', 'SK Telecom', 'AIS', '',
+  ],
+  us: ['T-Mobile', 'AT&T', 'Verizon', 'MetroPCS', 'Visible', 'Mint Mobile', 'Cricket', ''],
+  south_asia: ['Grameenphone', 'Robi', 'Banglalink', 'Teletalk', 'Jio', 'Airtel', 'Vi India', 'BSNL', ''],
+  europe: ['Vodafone', 'EE', 'O2 - UK', 'Three', 'Telekom.de', 'Orange F', 'SFR', 'Movistar', 'TIM', 'KPN', ''],
+  latam: ['Claro', 'Vivo', 'TIM', 'Telcel', 'Movistar', 'Entel', 'Personal', ''],
 };

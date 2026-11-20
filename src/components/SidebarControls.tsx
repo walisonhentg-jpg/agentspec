@@ -501,8 +501,8 @@ export function SidebarControls({
         </div>
         <p className="text-xs text-slate-500 leading-relaxed">
           {trafficMode === 'unique'
-            ? 'Every line is strictly unique up to the authentic combination limit.'
-            : 'Samples by real market-share weights so any filter scales to 1,00,000+ lines.'}
+            ? 'Balanced mix — every User-Agent appears only once, with zero repeats for 7 days.'
+            : 'Market-share weighted — 100% unique lines with zero repeats within 7 days.'}
         </p>
       </div>
 
@@ -544,7 +544,7 @@ export function SidebarControls({
           </button>
         </div>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Prevents repeating any User-Agent generated in the last 7 days.
+          Guarantees every User-Agent appears only once and never repeats within 7 days (automatically eligible again after 7 days).
         </p>
         <div className="flex items-center justify-between text-xs pt-1">
           <span className="text-slate-500 font-mono tabular-nums">
