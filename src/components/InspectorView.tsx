@@ -19,7 +19,7 @@ interface InspectorViewProps {
 const SAMPLE_CASES = [
   {
     label: 'Real: iPhone 18 Pro Max (FB iOS 27)',
-    ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/24A362 [FBAN/FBIOS;FBAV/588.0.0.51.72;FBBV/914208510;FBDV/iPhone19,3;FBMD/iPhone;FBSN/iOS;FBSV/27.0;FBSS/3;FBID/phone;FBLC/en_US;FBOP/5;FBRV/914902115]',
+    ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/24B119 [FBAN/FBIOS;FBAV/588.0.0.42.55;FBBV/910482315;FBDV/iPhone19,3;FBMD/iPhone;FBSN/iOS;FBSV/27.2;FBSS/3;FBID/phone;FBLC/en_US;FBOP/5;FBRV/910902115]',
   },
   {
     label: 'Real: Chrome 2026 (Windows)',
@@ -27,7 +27,7 @@ const SAMPLE_CASES = [
   },
   {
     label: 'Real: Instagram Android (S25 Ultra)',
-    ua: 'Mozilla/5.0 (Linux; Android 15; SM-S938B Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/155.0.7990.104 Mobile Safari/537.36 Instagram 452.0.0.48.94 Android (35/15; 560dpi; 1440x3120; samsung; SM-S938B; sun; qcom; en_US; 904218400)',
+    ua: 'Mozilla/5.0 (Linux; Android 15; SM-S938B Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/155.0.8059.84 Mobile Safari/537.36 Instagram 451.0.0.44.86 Android (35/15; 560dpi; 1440x3120; samsung; SM-S938B; sun; qcom; en_US; 906190445)',
   },
   {
     label: 'Fake Bot: HeadlessChrome',
@@ -237,7 +237,11 @@ export function InspectorView({ inputUa, onChangeUa }: InspectorViewProps) {
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
                 <span>{report.detectedBrowser} {report.detectedBrowserVersion !== '—' ? report.detectedBrowserVersion : ''}</span>
                 <span aria-hidden="true">·</span>
-                <span>{report.deviceBrand} {report.deviceModel}</span>
+                <span>
+                  {report.deviceModel.toLowerCase().startsWith(report.deviceBrand.toLowerCase())
+                    ? report.deviceModel
+                    : `${report.deviceBrand} ${report.deviceModel}`}
+                </span>
                 <span aria-hidden="true">·</span>
                 <span>{report.detectedOs}</span>
               </div>
@@ -279,7 +283,7 @@ export function InspectorView({ inputUa, onChangeUa }: InspectorViewProps) {
             />
           </div>
 
-          <div className="lg:col-span-8 bg-slate-50/70 border border-slate-200 rounded-xl p-5 flex flex-col justify-between gap-4">
+          <div className="lg:col-span-8 bg-slate-50/70 border border-slate-200 rounded-xl p-5 flex flex-col justify-start gap-5">
             <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
                 <MonitorSmartphone className="w-4 h-4 text-blue-600" aria-hidden="true" />

@@ -1009,8 +1009,8 @@ const BOT_SIGNATURE_PATTERNS: Array<{ regex: RegExp; category: string }> = [
     category: 'AI / SEO Scraper Bot',
   },
   {
-    regex: /(Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|\bWhatsApp\/|\bcrawler\b|\bspider\b|\bbot\b)/i,
-    category: 'Crawler / Spoofed Bot Signature',
+    regex: /(Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|\bWhatsApp\/|\bcrawler\b|\bspider\b|\bbot\b|httrack|nikto|sqlmap|\bnmap\b|masscan|zgrab|censys|shodan)/i,
+    category: 'Crawler / Scanner / Bot Signature',
   },
 ];
 
@@ -1234,6 +1234,7 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
       ua.includes('BytedanceWebview');
     const knownRelease = CHROMIUM_RELEASES.find((r) => r.major === major);
 
+    const safariTrailer = ua.match(/\bSafari\/(\d+\.\d+)/)?.[1];
     if (major > 158) {
       chromeOk = false;
       chromeDetail = `FRAUD / Unreleased future Chrome/${major} (latest verified stable is Chrome 158).`;
@@ -1243,6 +1244,9 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     } else if (minor !== 0) {
       chromeOk = false;
       chromeDetail = `FRAUD: Chrome minor version is ${minor}; Chromium always uses 0.`;
+    } else if (safariTrailer !== '537.36') {
+      chromeOk = false;
+      chromeDetail = `FRAUD: Chromium/Blink Chrome/${major} must carry Safari/537.36 trailer (found ${safariTrailer ? `Safari/${safariTrailer}` : 'missing'}).`;
     } else if ((isDesktop || isReducedAndroid) && major >= 110 && branch !== 0 && !ua.includes('Edg/') && !ua.includes('EdgA/') && !ua.includes('SamsungBrowser/')) {
       chromeOk = false;
       chromeDetail = `FRAUD: UA-Reduced Chrome ${major} must use .0.0.0 — found spoofed branch .${branch}.${patch}.`;
@@ -1455,7 +1459,14 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
       13: /^(T[PQ]\d[A-Z]|TKQ1)/i,
     };
 
-    if (matchedDevice && (androidVer < matchedDevice.minAndroid || androidVer > matchedDevice.maxAndroid)) {
+    const isValidAospBuildShape = /^(?:[A-Z]{2,3}\d[A-Z0-9]?|V\d[A-Z0-9]+|U\d[A-Z0-9]+)\.[A-Z0-9._-]+$/i.test(buildId);
+    const isMotorolaBuild = /^(V1UM|U3UM)/i.test(buildId);
+    const isXiaomiBuild = /^(AQ3A|UKQ1|TKQ1)/i.test(buildId);
+
+    if (!isValidAospBuildShape) {
+      sdkOk = false;
+      sdkDetail = `FRAUD: Malformed or fake Android Build/${buildId} (does not match AOSP/OEM build format).`;
+    } else if (matchedDevice && (androidVer < matchedDevice.minAndroid || androidVer > matchedDevice.maxAndroid)) {
       sdkOk = false;
       sdkDetail = `FRAUD: ${matchedDevice.model} (${matchedDevice.marketing}) launched for Android ${matchedDevice.minAndroid}–${matchedDevice.maxAndroid}, impossible on Android ${androidVer}.`;
     } else if (UNVERIFIED_ANDROID17_BUILDS.has(buildId)) {
@@ -1479,12 +1490,21 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     } else if (!isPixelDevice && (PIXEL_EXCLUSIVE_BUILDS.has(buildId) || /^(C[PD][1-4]A|AD1A|UD2A|BD3A)\./i.test(buildId))) {
       sdkOk = false;
       sdkDetail = `FRAUD: Pixel-exclusive Build/${buildId} spoofed onto non-Pixel hardware (${modelName}).`;
+    } else if (matchedDevice && matchedDevice.oem !== 'motorola' && isMotorolaBuild) {
+      sdkOk = false;
+      sdkDetail = `FRAUD: Motorola-only Build/${buildId} spoofed onto ${matchedDevice.marketing}.`;
+    } else if (matchedDevice && matchedDevice.oem === 'samsung' && isXiaomiBuild) {
+      sdkOk = false;
+      sdkDetail = `FRAUD: Xiaomi/HyperOS Build/${buildId} spoofed onto Samsung ${matchedDevice.model}.`;
     } else if (isKnownAospPrefix && buildPrefixRules[androidVer] && !buildPrefixRules[androidVer].test(buildId)) {
       sdkOk = false;
       sdkDetail = `FRAUD: Android ${androidVer} build mismatch — Build/${buildId} belongs to a different Android version.`;
     } else {
       sdkDetail = `Coherent Android ${androidVer} OEM device (${modelName}) and Build/${buildId}.`;
     }
+  } else if (sdkOk && hasAndroid && !isNativeYt && !ffMatch && !/Linux;\s*Android 10;\s*K\)/.test(ua)) {
+    sdkOk = false;
+    sdkDetail = 'FRAUD / Anomaly: Non-reduced Android UA missing required Build/... OEM firmware tag.';
   } else if (sdkOk && /Pixel 11/i.test(ua) && standaloneBuild && !/^(CP4A\.261105\.040\.(D1|B2)|CD1A\.)/i.test(standaloneBuild)) {
     sdkOk = false;
     sdkDetail = `FRAUD: Pixel 11 requires Android 17 Pixel 11 build IDs, not Build/${standaloneBuild}.`;
@@ -1511,12 +1531,26 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
   const fbBuildOwner = fbbvMatch ? FACEBOOK_VERSIONS.find((f) => f.build === fbbvMatch[1]) : undefined;
   const fbavFullPrefix = fbavMatch?.[1];
 
+  const headerIosDotAny =
+    ua.match(/(?:iPhone OS|CPU iOS)\s+(\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.') ??
+    ua.match(/FBSV\/(\d+(?:\.\d+)*)/)?.[1];
+  const headerIosMajorAny = headerIosDotAny ? Number(headerIosDotAny.split('.')[0]) : undefined;
+  const matchedIosGlobal = headerIosDotAny
+    ? IOS_RELEASES.find((r) => r.osDot === headerIosDotAny)
+    : undefined;
+
   if (embeddedIphoneId && !matchedIphoneModel) {
     iabOk = false;
     iabDetail = `FRAUD / Unsupported Apple device ID "${embeddedIphoneId}" (valid verified range: iPhone 12 [iPhone13,1] through iPhone 18 Pro Max [iPhone19,3/19,7]).`;
   } else if (mobileBuild && UNVERIFIED_IOS_BUILDS.has(mobileBuild)) {
     iabOk = false;
     iabDetail = `FRAUD: Unverified Apple iOS build "${mobileBuild}".`;
+  } else if (matchedIphoneModel && headerIosMajorAny && headerIosMajorAny < matchedIphoneModel.minIosMajor) {
+    iabOk = false;
+    iabDetail = `FRAUD: ${embeddedIphoneId} (${matchedIphoneModel.name}) did not exist on iOS ${headerIosDotAny} (minimum iOS ${matchedIphoneModel.minIosMajor}).`;
+  } else if (matchedIosGlobal && mobileBuild && !matchedIosGlobal.buildIds.includes(mobileBuild)) {
+    iabOk = false;
+    iabDetail = `FRAUD: iOS ${headerIosDotAny} firmware build mismatch (expected ${matchedIosGlobal.buildIds.join('/')}, found ${mobileBuild}).`;
   } else if (fbavMatch && Number(fbavMatch[1]) > 588) {
     iabOk = false;
     iabDetail = `FRAUD / Unreleased Facebook FBAV/${fbavMatch[1]}.x (max verified: 588.0.0).`;
@@ -1533,24 +1567,16 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     iabOk = false;
     iabDetail = `FRAUD / Unreleased YouTube ${ytVerMatch[1]} (max verified: 21.46.3).`;
   } else if (ua.includes('FBAN/FBIOS')) {
-    const hasIphone = ua.includes('iPhone') && ua.includes('FBSN/iOS');
+    const hasIphoneCheck = ua.includes('iPhone') && ua.includes('FBSN/iOS');
     const fbsvFull = ua.match(/FBSV\/(\d+(?:\.\d+)*)/)?.[1];
-    const fbsvMajor = fbsvFull ? Number(fbsvFull.split('.')[0]) : undefined;
-    const matchedIos = fbsvFull ? IOS_RELEASES.find((r) => r.osDot === fbsvFull) : undefined;
     const headerIosDot = ua.match(/iPhone OS (\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.');
 
-    if (!hasIphone) {
+    if (!hasIphoneCheck) {
       iabOk = false;
       iabDetail = 'FRAUD: FBAN/FBIOS token requires iPhone + FBSN/iOS.';
     } else if (fbsvFull && headerIosDot && fbsvFull !== headerIosDot) {
       iabOk = false;
       iabDetail = `FRAUD: iOS version mismatch between header (${headerIosDot}) and FBSV (${fbsvFull}).`;
-    } else if (matchedIphoneModel && fbsvMajor && fbsvMajor < matchedIphoneModel.minIosMajor) {
-      iabOk = false;
-      iabDetail = `FRAUD: ${embeddedIphoneId} (${matchedIphoneModel.name}) did not exist on iOS ${fbsvFull}.`;
-    } else if (matchedIos && mobileBuild && !matchedIos.buildIds.includes(mobileBuild)) {
-      iabOk = false;
-      iabDetail = `FRAUD: iOS ${fbsvFull} build mismatch (expected ${matchedIos.buildIds.join('/')}, found ${mobileBuild}).`;
     } else {
       iabDetail = embeddedIphoneId
         ? `Verified Facebook iOS signature (${matchedIphoneModel?.name ?? embeddedIphoneId} on iOS ${fbsvFull ?? '?'}).`
@@ -1588,35 +1614,22 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
       iabOk = false;
       iabDetail = 'FRAUD: Malformed Instagram In-App signature.';
     }
+  } else if (ua.includes('Musical_ly/') && isIosToken) {
+    const ttIosVer = ua.match(/\(\s*iPhone\d+,\d+;\s*iOS\s+(\d+(?:\.\d+)*)/)?.[1];
+    const ttScale = ua.match(/\bScale\/(\d+)\.00/)?.[1];
+    if (ttIosVer && headerIosDotAny && ttIosVer !== headerIosDotAny) {
+      iabOk = false;
+      iabDetail = `FRAUD: TikTok iOS version mismatch (header ${headerIosDotAny} vs iOS ${ttIosVer}).`;
+    } else if (matchedIphoneModel && ttScale && Number(ttScale) !== matchedIphoneModel.scale) {
+      iabOk = false;
+      iabDetail = `FRAUD: ${matchedIphoneModel.name} TikTok Scale/${ttScale}.00 mismatch (expected Scale/${matchedIphoneModel.scale}.00).`;
+    } else {
+      iabDetail = `Verified TikTok iOS signature (${matchedIphoneModel?.name ?? 'iPhone'}).`;
+    }
   }
   checks.push({ id: 'iab_sig', label: 'Hardware Model & In-App Cross-Check', passed: iabOk, detail: iabDetail });
 
-  // 11. Structural HTTP Hygiene & Anomalies
-  const hasControlChars = /[\r\n\t\x00-\x1f\x7f]/.test(ua) || ua.length < 30 || ua.length > 1024;
-  const hasMalformedTokens = /;;|\s{2,}/.test(ua) || (ua.includes('AppleWebKit/537.36') && !ua.includes('(KHTML, like Gecko)'));
-  const hygieneOk = !hasControlChars && !hasMalformedTokens;
-  checks.push({
-    id: 'sanity',
-    label: 'HTTP Header Hygiene & Token Spacing',
-    passed: hygieneOk,
-    detail: hasControlChars
-      ? `Invalid length (${ua.length} bytes) or contains control/newline characters.`
-      : hasMalformedTokens
-      ? 'Suspicious formatting anomaly (double semicolons/spaces or missing KHTML token).'
-      : `Clean single-line header (${ua.length} bytes).`,
-  });
-
-  const passedCount = checks.filter((c) => c.passed).length;
-  const isValid = passedCount === checks.length;
-  const score = Math.round((passedCount / checks.length) * 100);
-  const riskScore = 100 - score;
-  const verdict: ValidationReport['verdict'] = isValid
-    ? 'REAL'
-    : isBot || score <= 80
-    ? 'FRAUD_OR_BOT'
-    : 'SUSPICIOUS';
-
-  // Extract Rich Parsed Identity Details
+  // Extract Browser & Engine tokens early so Rule 11 can catch bare/browserless spoofs
   let detectedBrowser = 'Unknown';
   let detectedBrowserVersion = '—';
   if (ua.includes('FBAN/FBIOS') || ua.includes('FB_IAB/FB4A') || ua.includes('FBAN/FB4A')) {
@@ -1662,25 +1675,60 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     detectedBrowser = botHit;
   }
 
-  let detectedOs = 'Unknown';
-  const iosDot = ua.match(/FBSV\/([0-9.]+)/)?.[1] ?? ua.match(/iPhone OS (\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.');
-  if (winMatch) detectedOs = winMatch[1] === '10.0' ? 'Windows 10 / 11 (x64)' : `Windows NT ${winMatch[1]}`;
-  else if (hasIphone) detectedOs = iosDot ? `iOS ${iosDot}` : 'iOS (iPhone)';
-  else if (hasAndroid) detectedOs = rawAndroidVer ? `Android ${rawAndroidVer}` : 'Android';
-  else if (hasMac) detectedOs = 'macOS';
-  else if (hasLinuxX11) detectedOs = 'Linux x86_64';
-
   let detectedEngine = 'Unknown';
   if (ua.includes('AppleWebKit/537.36')) detectedEngine = 'Blink (Chromium)';
   else if (ua.includes('AppleWebKit/605.1.15')) detectedEngine = 'WebKit (Apple)';
   else if (ua.includes('Gecko/')) detectedEngine = 'Gecko (Mozilla)';
   else if (ua.includes('Cronet/')) detectedEngine = 'Cronet (Google)';
 
+  // 11. Structural HTTP Hygiene, Header Completeness & Anomalies
+  const hasControlChars = /[\r\n\t\x00-\x1f\x7f]/.test(ua) || ua.length < 30 || ua.length > 1024;
+  const hasMalformedTokens = /;;|\s{2,}/.test(ua) || (ua.includes('AppleWebKit/537.36') && !ua.includes('(KHTML, like Gecko)'));
+  const missingBrowserOrEngine = detectedBrowser === 'Unknown' || (!isNativeYt && detectedEngine === 'Unknown');
+  const hygieneOk = !hasControlChars && !hasMalformedTokens && !missingBrowserOrEngine;
+  checks.push({
+    id: 'sanity',
+    label: 'HTTP Header Hygiene & Browser Completeness',
+    passed: hygieneOk,
+    detail: hasControlChars
+      ? `Invalid length (${ua.length} bytes) or contains control/newline characters.`
+      : hasMalformedTokens
+      ? 'Suspicious formatting anomaly (double semicolons/spaces or missing KHTML token).'
+      : missingBrowserOrEngine
+      ? 'FRAUD / Truncated Header: Missing identifiable browser product or rendering engine token.'
+      : `Clean single-line header (${ua.length} bytes).`,
+  });
+
+  const passedCount = checks.filter((c) => c.passed).length;
+  const isValid = passedCount === checks.length;
+  const score = Math.round((passedCount / checks.length) * 100);
+  const riskScore = 100 - score;
+  const hasExplicitFraud = checks.some((c) => !c.passed && c.detail.startsWith('FRAUD'));
+  const verdict: ValidationReport['verdict'] = isValid
+    ? 'REAL'
+    : isBot || hasExplicitFraud || score <= 80
+    ? 'FRAUD_OR_BOT'
+    : 'SUSPICIOUS';
+
+  let detectedOs = 'Unknown';
+  const iosDot = ua.match(/FBSV\/([0-9.]+)/)?.[1] ?? ua.match(/(?:iPhone OS|CPU iOS)\s+(\d+(?:_\d+)*)/)?.[1]?.replace(/_/g, '.');
+  if (winMatch) detectedOs = winMatch[1] === '10.0' ? 'Windows 10 / 11 (x64)' : `Windows NT ${winMatch[1]}`;
+  else if (hasIphone) detectedOs = iosDot ? `iOS ${iosDot}` : 'iOS (iPhone)';
+  else if (hasAndroid) detectedOs = rawAndroidVer ? `Android ${rawAndroidVer}` : 'Android';
+  else if (hasMac) detectedOs = 'macOS';
+  else if (hasLinuxX11) detectedOs = 'Linux x86_64';
+
   let deviceType = 'Unknown';
   let deviceBrand = 'Unknown';
   let deviceModel = 'Unknown';
   let hardwareId = '—';
-  let osBuild = standaloneBuild ?? mobileBuild ?? '—';
+  const rawMobileToken = ua.match(/\bMobile\/([A-Za-z0-9]+)/)?.[1];
+  let osBuild =
+    standaloneBuild ??
+    mobileBuild ??
+    (rawMobileToken === '15E148'
+      ? '15E148 (iOS WebKit Frozen)'
+      : rawMobileToken ?? '—');
   let screenSpec = '—';
   let chipsetSpec = '—';
   let deviceVisualType: DeviceVisualType = 'unknown';
@@ -1703,8 +1751,9 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
       hardwareId = matchedIphoneModel.id;
       screenSpec = `${matchedIphoneModel.pxRes} px · @${matchedIphoneModel.scale}x`;
     } else {
-      deviceModel = 'Apple iPhone';
-      hardwareId = embeddedIphoneId ?? 'iPhone (WebKit Standard)';
+      deviceModel = 'iPhone';
+      hardwareId = embeddedIphoneId ?? 'Masked by iOS WebKit Privacy';
+      screenSpec = 'Super Retina OLED (@3x typical)';
     }
     chipsetSpec = 'Apple Silicon (ARM64)';
   } else if (hasAndroid) {
@@ -1722,9 +1771,13 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
           ? 'android_pixel'
           : 'android_other';
     } else if (/Linux;\s*Android 10;\s*K\)/.test(ua)) {
-      deviceBrand = ua.includes('SamsungBrowser/') ? 'Samsung (UA-Reduced)' : 'Android (UA-Reduced)';
-      deviceModel = ua.includes('SamsungBrowser/') ? 'Samsung Galaxy (Reduced K)' : 'Android Smartphone (Reduced K)';
-      hardwareId = 'K (Privacy Reduced)';
+      deviceBrand = ua.includes('SamsungBrowser/') ? 'Samsung' : 'Android OEM';
+      deviceModel = ua.includes('SamsungBrowser/')
+        ? 'Galaxy Smartphone (UA-Reduced)'
+        : 'Android Smartphone (UA-Reduced)';
+      hardwareId = 'K (Chrome Privacy Reduced)';
+      osBuild = 'Android 10; K (Reduced Token)';
+      screenSpec = 'Client Hints Required';
       deviceVisualType = ua.includes('SamsungBrowser/') ? 'android_samsung' : 'android_other';
     } else {
       const rawModel = androidBuildMatch?.[2]?.trim() ?? 'Android Device';
@@ -1735,23 +1788,29 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
     }
   } else if (hasWin) {
     deviceType = 'Desktop / Laptop';
-    deviceBrand = 'Microsoft Windows';
+    deviceBrand = 'Microsoft';
     deviceModel = 'Windows 10/11 PC';
     hardwareId = 'Win64; x64';
+    osBuild = `Windows NT ${winMatch?.[1] ?? '10.0'}`;
+    screenSpec = 'Desktop Viewport';
     chipsetSpec = 'x86_64';
     deviceVisualType = 'windows';
   } else if (hasMac) {
     deviceType = 'Desktop / Laptop';
     deviceBrand = 'Apple';
-    deviceModel = 'Apple Mac (macOS)';
-    hardwareId = 'Macintosh';
+    deviceModel = 'Mac (macOS)';
+    hardwareId = 'Macintosh; Intel Mac OS X';
+    osBuild = `${ua.match(/Mac OS X ([0-9_]+)/)?.[1]?.replace(/_/g, '.') ?? '10.15.7'} (Frozen)`;
+    screenSpec = 'Retina Desktop';
     chipsetSpec = 'Intel / Apple Silicon (Frozen x86_64)';
     deviceVisualType = 'mac';
   } else if (hasLinuxX11) {
     deviceType = 'Desktop / Workstation';
-    deviceBrand = 'Linux';
-    deviceModel = ua.includes('Ubuntu') ? 'Ubuntu Linux Desktop' : 'Linux Desktop';
+    deviceBrand = ua.includes('Ubuntu') ? 'Ubuntu' : 'Linux';
+    deviceModel = 'Workstation (X11)';
     hardwareId = 'X11; x86_64';
+    osBuild = 'X11; Linux x86_64';
+    screenSpec = 'Desktop Viewport';
     chipsetSpec = 'x86_64';
     deviceVisualType = 'linux';
   }
@@ -1759,7 +1818,7 @@ export function validateUserAgent(uaRaw: string): ValidationReport {
   const localeDetected =
     ua.match(/FBLC\/([a-z]{2}_[A-Z]{2})/)?.[1] ??
     ua.match(/ByteLocale\/([a-z]{2}-[A-Z]{2})/)?.[1] ??
-    ua.match(/;\s*([a-z]{2}_[A-Z]{2});\s*(?:[a-z]{2}|[0-9]{6,}|Pixel|SM-)/)?.[1] ??
+    ua.match(/;\s*([a-z]{2}[_-][A-Z]{2})(?:;|\))/)?.[1] ??
     '—';
   const carrierDetected = ua.match(/FBCR\/([^;]*)/)?.[1]?.trim() || '—';
 
